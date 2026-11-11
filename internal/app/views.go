@@ -220,6 +220,7 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 
 	if tx.iconSize != icons.size {
 		tx.icon, tx.iconSize = nil, icons.size
+		tx.thumb, tx.thumbDone = nil, false
 	}
 	icon := tx.icon
 	if icon == nil {
@@ -227,6 +228,13 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 		if icon, final = icons.forEntry(t.Path, e); final {
 			tx.icon = icon
 		}
+	}
+	// A picture of the file's content takes the icon's place once made.
+	if !tx.thumbDone {
+		tx.thumb, tx.thumbDone = icons.thumbnail(t.Path, e)
+	}
+	if tx.thumb != nil {
+		icon = tx.thumb
 	}
 	faded := e.Hidden() || len(a.cut) > 0 && a.cut[t.pathOf(e)]
 	picture := func() ui.Element {

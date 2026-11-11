@@ -1,0 +1,7 @@
+{
+  "name": "Cairn",
+  "identifier": "dev.cairn.filemanager",
+  "version": "0.1.0",
+  "icon": "../../internal/app/icon.png",
+  "out": "../../bin/dist"
+}

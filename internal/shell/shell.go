@@ -61,6 +61,14 @@ func Icon(path string, attr fsys.Attr, px int, byType bool) (*image.RGBA, error)
 	return icon(path, attr, px, byType)
 }
 
+// Thumbnail is a picture of a file's content, as the system's file
+// manager shows pictures and videos, at most px pixels wide and high, in
+// the file's proportions. Files the system makes no such picture of have
+// none, and an error. The image is premultiplied RGBA. It reads the file,
+// unless the system kept the picture from before: call it on a Worker,
+// and not one that icons wait on.
+func Thumbnail(path string, px int) (*image.RGBA, error) { return thumbnail(path, px) }
+
 // OwnIcon reports whether an entry may have an icon of its own rather
 // than its type's: programs, shortcuts, icon files, and directories that
 // name one. It looks at the name and the attributes alone.

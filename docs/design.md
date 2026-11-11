@@ -90,7 +90,7 @@ MyGo 的补丁里有两处是为这条路径加的：`Context.Rebuild`（一帧�
 | 平铺 | 同上：图标旁边是名字、类型、大小 | 32 |
 | 中 / 大 / 超大图标 | 同上：图标在上，名字在下，最多两行 | 48 / 96 / 192 |
 
-图标按视图需要的像素取系统里「不小于它」的那一档再缩小，不放大。选择、光标、右键菜单、拖放、重命名在所有视图里是同一套状态（`Tab.sel`、`Tab.cursor`），切视图不丢选择。
+图标按视图需要的像素取系统里「不小于它」的那一档再缩小，不放大。三个图标视图里，图片、视频、PDF 用内容的缩略图代替图标（`shell.Thumbnail`，走系统的缩略图缓存），在单独的两个工作线程上做，不挡图标；云端占位文件不取，免得触发下载。选择、光标、右键菜单、拖放、重命名在所有视图里是同一套状态（`Tab.sel`、`Tab.cursor`），切视图不丢选择。
 
 ## 文件的复制、剪切、拖放
 
@@ -113,7 +113,7 @@ MyGo 的补丁里有两处是为这条路径加的：`Context.Rebuild`（一帧�
 
 设置里两个开关，对应 `shell.SetDefaultFileManager`，都只写当前用户（HKCU），不需要管理员权限：
 
-- **用 Cairn 打开文件夹**：`HKCU\Software\Classes\Directory\shell` 和 `Drive\shell` 下加一个 `cairn` 动词并设为默认。别的程序「打开所在文件夹」、桌面上双击文件夹、`start D:\dir` 都会到 Cairn。
+- **用 Cairn 打开文件夹**：`HKCU\Software\Classes\Directory\shell` 和 `Drive\shell` 下加一个 `cairn` 动词并设为默认。别的程序用系统默认方式打开一个文件夹、桌面上双击文件夹、`start D:\dir` 都会到 Cairn。直接点名资源管理器的调用不走这个关联，仍然是资源管理器：`explorer.exe /select,…`，以及「在文件夹中显示并选中」用的 `SHOpenFolderAndSelectItems`。
 - **Win+E 打开 Cairn**：`HKCU\Software\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}\shell\opennewwindow\command`，带一个空的 `DelegateExecute`。
 
 打开开关前会把原来的值记到 `HKCU\Software\Cairn\DefaultBackup`，关掉时原样写回（包括「原来没有这个值」），所以如果之前把 Explorer++ 设成了默认，关掉 Cairn 的开关后还是 Explorer++。命令行里 `cairn --set-default` / `--unset-default` 做同样的事。
@@ -156,6 +156,8 @@ Cairn 是单实例的：第二次启动把参数交给已经在运行的那个�
 |---|---|---|
 | 文件拖到另一个窗格 | `deskcheck drag`，真实鼠标 | 文件移过去了，两边列表都更新 |
 | 文件拖到文件夹那一行 | 同上 | 文件进了那个文件夹 |
+| 文件拖到同一窗格另一个标签的标签头上 | 同上 | 文件进了那个标签的文件夹 |
+| 设置里的两个「默认文件管理器」开关 | 在真实窗口里点开设置、点两个复选框，再点掉 | 打开后注册表指向本程序，关掉后与之前逐行相同 |
 | 没有提示音 | `deskcheck listen` 期间真实按下 Alt+Q / Z / X、F10、无匹配的字母、退到顶之后继续按 Backspace、空剪贴板 Ctrl+V，加上导航、右键菜单、打不开的地址 | 系统提示音会话峰值 0.000000；对照音在同一会话里读到 0.000038 |
 | Win+E | 注册后注入真实的 Win+E | 打开的是 Cairn，没有资源管理器窗口；还原后注册表与之前逐行相同 |
 | 剪贴板互通 | 在 Cairn 里复制 / 剪切后用 .NET 读系统剪贴板；写入资源管理器格式的剪切再在 Cairn 里粘贴 | `FileDrop` + `Preferred DropEffect` 为 5 / 2；粘贴成移动 |

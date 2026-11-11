@@ -97,6 +97,8 @@ func contextMenu(Window, []string, string, int, int) (MenuAction, error) {
 
 func openInSystem(string) error { return ErrUnsupported }
 
+func thumbnail(string, int) (*image.RGBA, error) { return nil, ErrUnsupported }
+
 func defaultFileManager(exe string) Default { return Default{} }
 
 func setDefaultFileManager(exe string, d Default) error { return ErrUnsupported }

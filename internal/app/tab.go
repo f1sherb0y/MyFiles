@@ -32,9 +32,13 @@ type rowText struct {
 	icon *ui.Bitmap
 	// iconSize is the size icon is of, in DIPs: another view asks anew.
 	iconSize int
-	modified string
-	size     string
-	made     bool
+	// thumb is the picture of the file's content, where the view shows
+	// one, and thumbDone set once it is known whether there is one.
+	thumb     *ui.Bitmap
+	thumbDone bool
+	modified  string
+	size      string
+	made      bool
 }
 
 // Tab is a folder shown in a pane, with the way there and back.

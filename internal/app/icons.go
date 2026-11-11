@@ -3,6 +3,7 @@ package app
 import (
 	"image"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -25,6 +26,25 @@ const iconWorkers = 3
 // Those in view are fetched again.
 const ownIconsMax = 600
 
+// thumbWorkers is how many threads make pictures of files' contents,
+// thumbMinSize the smallest icons, in DIPs, that show them, and thumbsMax
+// how many a size keeps.
+const (
+	thumbWorkers = 2
+	thumbMinSize = 48
+	thumbsMax    = 400
+)
+
+// pictured are the extensions of the files whose content shows in place
+// of their icon: pictures and videos.
+var pictured = map[string]bool{
+	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".bmp": true, ".webp": true,
+	".tif": true, ".tiff": true, ".heic": true, ".heif": true, ".avif": true, ".jxl": true,
+	".ico": true, ".svg": true, ".psd": true, ".raw": true, ".cr2": true, ".nef": true, ".arw": true, ".dng": true,
+	".mp4": true, ".mkv": true, ".mov": true, ".avi": true, ".webm": true, ".wmv": true, ".m4v": true, ".flv": true,
+	".pdf": true,
+}
+
 // dirClass is the key of the icon every plain directory shows, which no
 // extension can be.
 const dirClass = "/"
@@ -38,6 +58,8 @@ type iconRequest struct {
 	size   int
 	byType bool
 	typeOf bool
+	// thumb asks for a picture of the file's content instead.
+	thumb bool
 }
 
 type iconResult struct {
@@ -59,6 +81,10 @@ type iconSet struct {
 	asked map[string]bool
 	// file and dir stand in for icons not fetched yet.
 	file, dir *ui.Bitmap
+	// thumbs holds the pictures of files' contents, by path and time of
+	// change, nil for files that have none; thumbAsked those asked for.
+	thumbs     map[string]*ui.Bitmap
+	thumbAsked map[string]bool
 }
 
 // icons keeps the icons and type names the views show. Rows ask as they
@@ -87,6 +113,10 @@ type icons struct {
 	queue   []iconRequest
 	results []iconResult
 	posted  bool
+	// thumbQueue are the pictures asked for, which workers of their own
+	// make: reading a large picture must not hold icons back.
+	thumbWake  *sync.Cond
+	thumbQueue []iconRequest
 }
 
 func newIcons(scale float64, post func(func()), changed func()) *icons {
@@ -103,8 +133,12 @@ func newIcons(scale float64, post func(func()), changed func()) *icons {
 		changed: changed,
 	}
 	ic.wake = sync.NewCond(&ic.mu)
+	ic.thumbWake = sync.NewCond(&ic.mu)
 	for range iconWorkers {
-		go ic.work(shell.NewWorker())
+		go ic.work(shell.NewWorker(), &ic.queue, ic.wake)
+	}
+	for range thumbWorkers {
+		go ic.work(shell.NewWorker(), &ic.thumbQueue, ic.thumbWake)
 	}
 	// The two icons most rows show, before the first row asks.
 	ic.at(iconSize)
@@ -122,6 +156,9 @@ func (ic *icons) at(size int) *iconSet {
 		px:    int(math.Round(float64(size) * ic.scale)),
 		byKey: map[string]*ui.Bitmap{},
 		asked: map[string]bool{},
+
+		thumbs:     map[string]*ui.Bitmap{},
+		thumbAsked: map[string]bool{},
 	}
 	ic.sets[size] = s
 	s.ask(iconRequest{key: dirClass, path: "folder", attr: fsys.AttrDir, byType: true})
@@ -129,24 +166,27 @@ func (ic *icons) at(size int) *iconSet {
 	return s
 }
 
-// work takes requests, the newest first, and answers them on a thread of
-// the system's liking.
-func (ic *icons) work(w *shell.Worker) {
+// work takes the requests of a queue, the newest first, and answers them
+// on a thread of the system's liking.
+func (ic *icons) work(w *shell.Worker, queue *[]iconRequest, wake *sync.Cond) {
 	for {
 		ic.mu.Lock()
-		for len(ic.queue) == 0 {
-			ic.wake.Wait()
+		for len(*queue) == 0 {
+			wake.Wait()
 		}
-		req := ic.queue[len(ic.queue)-1]
-		ic.queue = ic.queue[:len(ic.queue)-1]
+		req := (*queue)[len(*queue)-1]
+		*queue = (*queue)[:len(*queue)-1]
 		ic.mu.Unlock()
 
 		done := make(chan iconResult, 1)
 		w.Do(func() {
 			res := iconResult{req: req}
-			if req.typeOf {
+			switch {
+			case req.typeOf:
 				res.name = shell.TypeName(req.path, req.attr&fsys.AttrDir != 0)
-			} else {
+			case req.thumb:
+				res.img, _ = shell.Thumbnail(req.path, req.size)
+			default:
 				res.img, _ = shell.Icon(req.path, req.attr, req.size, req.byType)
 			}
 			done <- res
@@ -180,7 +220,16 @@ func (ic *icons) deliver() {
 			continue
 		}
 		for _, s := range ic.sets {
-			if s.px == r.req.size {
+			switch {
+			case s.px != r.req.size:
+			case r.req.thumb:
+				// A picture is its file's alone: no other key shares it.
+				var b *ui.Bitmap
+				if r.img != nil {
+					b = ui.NewBitmap(r.img)
+				}
+				s.thumbs[r.req.key] = b
+			default:
 				s.took(r.req.key, ic.bitmap(r.img))
 			}
 		}
@@ -245,6 +294,37 @@ func (s *iconSet) ask(req iconRequest) {
 	s.asked[req.key] = true
 	req.size = s.px
 	s.ic.enqueue(req)
+}
+
+// thumbnail is the picture of the content of an entry of dir, for the
+// views whose icons are large enough to show one, and whether that is
+// final: nil and true for an entry that has none, nil and false while it
+// is being made.
+func (s *iconSet) thumbnail(dir string, e *fsys.Entry) (*ui.Bitmap, bool) {
+	if s.size < thumbMinSize || dir == fsys.Computer || e.IsDir() || e.Attr&fsys.AttrOffline != 0 || !pictured[e.Ext()] {
+		return nil, true
+	}
+	path := fsys.Join(dir, e.Name)
+	// A file written again is another picture.
+	key := path + "|" + strconv.FormatInt(e.ModTime, 36)
+	if b, ok := s.thumbs[key]; ok {
+		return b, true
+	}
+	if !s.thumbAsked[key] {
+		if len(s.thumbAsked) >= thumbsMax {
+			// Enough kept: those in view are made again, from the
+			// system's cache this time.
+			clear(s.thumbs)
+			clear(s.thumbAsked)
+		}
+		s.thumbAsked[key] = true
+		ic := s.ic
+		ic.mu.Lock()
+		ic.thumbQueue = append(ic.thumbQueue, iconRequest{key: key, path: path, size: s.px, thumb: true})
+		ic.mu.Unlock()
+		ic.thumbWake.Signal()
+	}
+	return nil, false
 }
 
 // forEntry is the icon of an entry of dir, and whether it is the final

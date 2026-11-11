@@ -90,7 +90,7 @@ func (w *Window) dialogs(c *ui.Context) {
 			if ui.Checkbox(c, &reg.Folders, "Open folders with Cairn").Changed() {
 				w.register(reg)
 			}
-			hint(c, "Folders opened from other programs, the desktop and “show in folder” commands open here instead of in File Explorer.")
+			hint(c, "Folders opened from the desktop and from other programs open here instead of in File Explorer. Programs that ask File Explorer itself to show a file still get File Explorer.")
 			if ui.Checkbox(c, &reg.Shortcut, "Open Cairn with Win+E").Changed() {
 				w.register(reg)
 			}
