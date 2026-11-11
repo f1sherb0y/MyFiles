@@ -1,0 +1,5 @@
+bin/
+out/
+ref/
+third_party/mygo/
+*.prof

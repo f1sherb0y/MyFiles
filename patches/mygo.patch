@@ -1,0 +1,488 @@
+diff --git a/internal/gpu/d3d11/shared.go b/internal/gpu/d3d11/shared.go
+index e8080b1..174e4ff 100644
+--- a/internal/gpu/d3d11/shared.go
++++ b/internal/gpu/d3d11/shared.go
+@@ -279,3 +279,13 @@ func (r *Renderer) dropDevice() {
+ 	r.dev, r.classes = nil, nil
+ 	releaseDevice(d)
+ }
++
++// Prewarm makes the device renderers share before the first window asks
++// for it, and keeps it for the life of the process. Creating a device
++// loads the GPU's driver, which takes tens of milliseconds, more on a
++// computer with two GPUs: called on a goroutine as the program starts, it
++// passes while the app makes its window, rather than in the window's first
++// frame.
++func Prewarm() {
++	_, _ = acquireDevice()
++}
+diff --git a/internal/windows/window.go b/internal/windows/window.go
+index e702317..4118292 100644
+--- a/internal/windows/window.go
++++ b/internal/windows/window.go
+@@ -648,6 +648,12 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
+ 		if r, ok := w.menuChar(wp, lp); ok {
+ 			return r, true
+ 		}
++		if w.hmenu == 0 && w.barless() {
++			// A letter that names no item of a menu of the system's, in
++			// a window without a menu bar of its own: the menu closes,
++			// where DefWindowProc would leave it open and beep.
++			return mncClose << 16, true
++		}
+ 	case wmSysCommand:
+ 		// Alt or F10 alone (lp 0) take the keyboard to the menu bar, and Alt
+ 		// and a letter (lp the letter) open the menu of the letter; Alt and
+@@ -662,6 +668,14 @@ func (w *window) message(m uint32, wp, lp uintptr) (uintptr, bool) {
+ 				return w.revealMenu(wp, lp), true
+ 			}
+ 		}
++		if wp&0xFFF0 == scKeyMenu && lp != ' ' && w.hmenu == 0 && w.barless() {
++			// Alt, F10, or Alt and a letter, in a window with neither a
++			// menu bar nor a title bar of the system's: there is no menu
++			// for the keyboard to go to. DefWindowProc would start the
++			// menu loop of a bar that is not there, and beep at the
++			// letter, or at the next key.
++			return 0, true
++		}
+ 	}
+ 	return 0, false
+ }
+diff --git a/transfer/drag.go b/transfer/drag.go
+index 4456f79..d0d77be 100644
+--- a/transfer/drag.go
++++ b/transfer/drag.go
+@@ -90,4 +90,9 @@ type DropOptions struct {
+ type Drop struct {
+ 	Data      Data
+ 	Operation Operation
++	// Suggested is the operation the user's modifier keys asked for as
++	// the drop came, None without them: a destination with a default of
++	// its own, as a file manager moving within a volume and copying
++	// across them, follows it only when it is set.
++	Suggested Operation
+ }
+diff --git a/ui/api_gen.go b/ui/api_gen.go
+index 3e753fd..a5c923e 100644
+--- a/ui/api_gen.go
++++ b/ui/api_gen.go
+@@ -475,6 +475,17 @@ func (_handle *Context) Now() time.Time {
+ 	return _ctx.Now()
+ }
+ 
++// OnPresented runs fn once, on the main thread, after the frame being
++// built was handed to the display: when what the view just built shows.
++// It is for measuring how long something took to reach the screen.
++func (_handle *Context) OnPresented(fn func()) {
++	_ctx := _handle.build()
++	if _ctx == nil {
++		return
++	}
++	_ctx.OnPresented(fn)
++}
++
+ // OpenURL opens a URL in the default browser, or the app registered for
+ // its scheme, as a Link does. It returns at once; OpenURLThen tells what
+ // came of it.
+@@ -525,6 +536,19 @@ func (_handle *Context) ReadClipboard() string {
+ 	return _ctx.ReadClipboard()
+ }
+ 
++// Rebuild has the view build once more in this frame, before it is laid
++// out and painted, as it does after a control took input: for state the
++// view changed after building what shows it, as a list replaced by an
++// action that ran once the view was built. The frame then shows the new
++// state, where Invalidate would show it in the frame after.
++func (_handle *Context) Rebuild() {
++	_ctx := _handle.build()
++	if _ctx == nil {
++		return
++	}
++	_ctx.Rebuild()
++}
++
+ // Region returns the user's regional formats (mygo.App.Region): the
+ // locale of the formats, the first day of the week and the hour cycle,
+ // which dates and times follow. A frame follows their changes.
+@@ -3420,7 +3444,9 @@ func (_handle Element) Absolute() Element {
+ // as it builds the element's node, only while assistive technology reads
+ // the window: what costs too much to give every frame, as the text of a
+ // large document. The node is a type internal to this module, so only
+-// its packages describe elements so, as package ui/editor does.
++// its packages describe elements so, as package ui/editor does. The
++// elements inside a text field described so show to assistive technology
++// too, as those of other text fields do not.
+ func (_handle Element) Access(fn func(n *platform.AccessNode)) Element {
+ 	_node := _handle.node()
+ 	if _node == nil {
+@@ -5676,7 +5702,9 @@ func (_handle Element) IgnoreInput(ignore bool) Element {
+ 
+ // InView reports whether some of the element showed in the window in the
+ // frame before, within the scroll containers and clips around it: to
+-// animate it in as it scrolls into view, as Motion's whileInView.
++// animate it in as it scrolls into view, as Motion's whileInView. When
++// what it answers from changes, as a scroll brings the element in, MyGo
++// builds another frame, so that the view reads the new answer.
+ func (_handle Element) InView() bool {
+ 	_node := _handle.node()
+ 	if _node == nil {
+@@ -5691,7 +5719,8 @@ func (_handle Element) InView() bool {
+ // from 0 to 1, showed in the frame before, within the window and the
+ // scroll containers and clips around it, grown by margin as InViewMargin
+ // grows them: as IntersectionObserver's threshold, and Motion's amount
+-// for whileInView and useInView. An impression counts once half of a
++// for whileInView and useInView, and builds another frame when what it
++// answers from changes, as InView does. An impression counts once half of a
+ // card shows with 0.5, an animation starts at a fifth of it with 0.2,
+ // and 1 waits for all of it; 0 is InViewMargin. Its area is that of its
+ // box as transforms move it, the box holding them as InView's clips do.
+@@ -5717,7 +5746,8 @@ func (_handle Element) InViewAmount(amount float32, margin ...float32) bool {
+ // IntersectionObserver's rootMargin and scrollMargin, a margin of 200
+ // has the element in view once it is within 200 DIPs of showing, to load
+ // what it shows before it scrolls in, and a negative one only once it is
+-// that far inside; other clips around it clip it as they do.
++// that far inside; other clips around it clip it as they do. As InView
++// does, it has MyGo build another frame when what it answers from changes.
+ func (_handle Element) InViewMargin(margin ...float32) bool {
+ 	_node := _handle.node()
+ 	if _node == nil {
+diff --git a/ui/context.go b/ui/context.go
+index bbce1e7..ac2e6fc 100644
+--- a/ui/context.go
++++ b/ui/context.go
+@@ -532,6 +532,22 @@ func (c *context) Instant() bool { return c.rt.instant() }
+ // time, such as a clock.
+ func (c *context) After(d time.Duration) { c.rt.scheduleAt(c.now.Add(d)) }
+ 
++// Rebuild has the view build once more in this frame, before it is laid
++// out and painted, as it does after a control took input: for state the
++// view changed after building what shows it, as a list replaced by an
++// action that ran once the view was built. The frame then shows the new
++// state, where Invalidate would show it in the frame after.
++func (c *context) Rebuild() { c.rt.consumed = true }
++
++// OnPresented runs fn once, on the main thread, after the frame being
++// built was handed to the display: when what the view just built shows.
++// It is for measuring how long something took to reach the screen.
++func (c *context) OnPresented(fn func()) {
++	if fn != nil {
++		c.rt.presented = append(c.rt.presented, fn)
++	}
++}
++
+ // ReadClipboard returns the text on the clipboard, and WriteClipboard
+ // puts text there, for widgets that copy and paste themselves. Call them
+ // on the main thread: in the view, or in an input handler.
+diff --git a/ui/data_drag.go b/ui/data_drag.go
+index 9183c29..49e4d13 100644
+--- a/ui/data_drag.go
++++ b/ui/data_drag.go
+@@ -142,7 +142,7 @@ func (rt *engine) dataDrop(x, y float32, d *platform.DataDragEvent) bool {
+ 			d.Operation = transfer.None
+ 			return false
+ 		}
+-		s.dataDropped = &transfer.Drop{Data: data, Operation: d.Operation}
++		s.dataDropped = &transfer.Drop{Data: data, Operation: d.Operation, Suggested: d.Offer.Suggested}
+ 	}
+ 	rt.requestFrame()
+ 	return true
+diff --git a/ui/gridview.go b/ui/gridview.go
+index f4444dc..09c3578 100644
+--- a/ui/gridview.go
++++ b/ui/gridview.go
+@@ -3,6 +3,8 @@ package ui
+ import (
+ 	"math"
+ 	"strings"
++
++	"github.com/egoist/mygo/transfer"
+ )
+ 
+ // GridState is the state of a GridView: how its items are told apart and
+@@ -33,6 +35,21 @@ type GridState struct {
+ 	// dragged is one, else that item, in order, and the item they go
+ 	// before, the number of items for the end.
+ 	Reorder func(items []int, to int)
++	// DragData, when set, makes the items a native drag source, as
++	// ListState.DragData makes a list's rows one: the items chosen, when
++	// the item dragged is one, else that item, drag the data it returns
++	// to other windows and applications, with DragOptions. A grid cannot
++	// both DragData and Reorder.
++	DragData    func(items []int) transfer.Data
++	DragOptions transfer.DragOptions
++	// ItemBuilt, when set, is called as the grid builds each item, with
++	// the element holding it: to make the item take what is dropped on
++	// it, to give it a context menu, or to paint it.
++	ItemBuilt func(item Element, i int)
++	// Gap is the room between items, and Border the width of the line
++	// around a chosen one, which the others leave clear: two units of
++	// the theme's spacing and 2 when zero, and none when negative.
++	Gap, Border float32
+ 
+ 	rows ListState
+ 	// cells are the items of the cells the last frame built, by their
+@@ -96,6 +113,12 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
+ 	wrapElement(e).Bind(&s.Handle)
+ 	n = max(n, 0)
+ 	gap := t.Space(2)
++	switch {
++	case s.Gap > 0:
++		gap = s.Gap
++	case s.Gap < 0:
++		gap = 0
++	}
+ 	// The columns: those that fit the width the rows had in the last
+ 	// frame, or the window's, first. The layout builds the next frame
+ 	// again where they changed.
+@@ -255,8 +278,15 @@ func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
+ // cell builds item i of a grid, choosing it when clicked.
+ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item func(i int)) *node {
+ 	t := c.theme
++	border := float32(2)
++	switch {
++	case s.Border > 0:
++		border = s.Border
++	case s.Border < 0:
++		border = 0
++	}
+ 	// A border, clear unless chosen, keeps the content in place as it is.
+-	cell := coreColumn(c).Key(s.key(i)).Grow(1).Basis(0).MinWidth(0).Height(height).Radius(t.Radius).Border(2, Color{}).Role(RoleListItem)
++	cell := coreColumn(c).Key(s.key(i)).Grow(1).Basis(0).MinWidth(0).Height(height).Radius(t.Radius).Border(border, Color{}).Role(RoleListItem)
+ 	cell.setPos, cell.setSize = i+1, n
+ 	if s.Label != nil {
+ 		cell.Label(s.Label(i))
+@@ -274,6 +304,12 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+ 			cell.Opacity(0.4)
+ 		}
+ 	}
++	if s.DragData != nil && s.Reorder == nil {
++		cell.DragDataFrom(func() transfer.Data { return s.DragData(s.dragged(i, n)) }, s.DragOptions)
++		if cell.Dragging() {
++			cell.Opacity(0.4)
++		}
++	}
+ 	if s.Selected != nil {
+ 		cell.flags |= flagClickable | flagHover | flagChoosable
+ 		cell.afterInput(func() {
+@@ -290,9 +326,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+ 		cell.checked = 1 + int8(b2f(chosen))
+ 		switch {
+ 		case chosen && grid.Focused():
+-			cell.Background(t.Accent.Alpha(0.2)).Border(2, t.Accent)
++			cell.Background(t.Accent.Alpha(0.2)).Border(border, t.Accent)
+ 		case chosen:
+-			cell.Background(t.SurfacePressed).Border(2, t.Border)
++			cell.Background(t.SurfacePressed).Border(border, t.Border)
+ 		default:
+ 			cell.styleFn = func(cell *node) {
+ 				if cell.Hovered() {
+@@ -309,6 +345,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+ 			})
+ 		}
+ 	}
++	if s.ItemBuilt != nil {
++		s.ItemBuilt(wrapElement(cell), i)
++	}
+ 	cell.Children(func() { item(i) })
+ 	return cell
+ }
+diff --git a/ui/list.go b/ui/list.go
+index 31b5903..d78c8fe 100644
+--- a/ui/list.go
++++ b/ui/list.go
+@@ -6,6 +6,8 @@ import (
+ 	"runtime"
+ 	"slices"
+ 	"strings"
++
++	"github.com/egoist/mygo/transfer"
+ )
+ 
+ // A List builds only the rows in view, and keeps its place by a row, its
+@@ -119,6 +121,19 @@ type ListState struct {
+ 	// itself takes nothing and shows no place between the rows. Return nil
+ 	// for rows that do not drag. A list cannot both DragRows and Reorder.
+ 	DragRows func(rows []int) any
++	// DragData, when set, makes the rows a native drag source, as
++	// Element.DragData makes an element one: the rows a drag moves, as
++	// DragRows gets them, drag the data it returns to other windows and
++	// applications, with DragOptions. With DragRows set too, typed
++	// targets of this process get its value. A list cannot both DragData
++	// and Reorder.
++	DragData func(rows []int) transfer.Data
++	// DragOptions are the options of the drags DragData starts.
++	DragOptions transfer.DragOptions
++	// RowBuilt, when set, is called as a Table builds each row, with the
++	// element spanning the row's cells: to make the row take what is
++	// dropped on it, or to paint it.
++	RowBuilt func(row Element, i int)
+ 	// DragSelect, with Selection, chooses rows as the pointer drags over
+ 	// them from the row it pressed: those from that row to the one under
+ 	// the pointer, as a Shift-click on it would, and with Cmd (Ctrl on
+@@ -816,6 +831,12 @@ func (f *listFrame) build(i int) *node {
+ 			})
+ 		}
+ 	}
++	if s.DragData != nil && s.Reorder == nil && !f.isHeader(i) {
++		w.DragDataFrom(func() transfer.Data { return s.DragData(f.dragged(i)) }, s.DragOptions)
++		if s.DragRows == nil && w.Dragging() {
++			w.Opacity(0.4)
++		}
++	}
+ 	if (s.Reorder != nil || s.DragRows != nil) && !f.isHeader(i) {
+ 		w.dragFrom(func() any { return f.dragValue(i) })
+ 		if w.Dragging() {
+@@ -859,6 +880,12 @@ func (s *ListState) cursor() *int {
+ 	return nil
+ }
+ 
++// Edit asks the EditableText in the row of a key (the row's index without
++// ListState.Key) to start editing, as F2 does for the row chosen: for a
++// file just made, say, whose name the user then types. The row edits once
++// it is built, so scroll it into view.
++func (s *ListState) Edit(key any) { s.editKey, s.editAsked = key, true }
++
+ // key returns the key of row i, its index without ListState.Key.
+ // rowDrag is rows of a list being dragged to another place in it
+ // (ListState.Reorder).
+diff --git a/ui/prewarm.go b/ui/prewarm.go
+new file mode 100644
+index 0000000..988a1ac
+--- /dev/null
++++ b/ui/prewarm.go
+@@ -0,0 +1,8 @@
++package ui
++
++// Prewarm starts what the first window of native UI would otherwise wait
++// for in its first frame, on another thread, and returns at once: on
++// Windows the Direct3D device, whose driver takes a while to load. An app
++// that knows it will show native UI calls it as it starts, before
++// mygo.App.Run; calling it is never needed, and does nothing elsewhere.
++func Prewarm() { prewarm() }
+diff --git a/ui/prewarm_other.go b/ui/prewarm_other.go
+new file mode 100644
+index 0000000..49a4d97
+--- /dev/null
++++ b/ui/prewarm_other.go
+@@ -0,0 +1,5 @@
++//go:build !windows
++
++package ui
++
++func prewarm() {}
+diff --git a/ui/prewarm_windows.go b/ui/prewarm_windows.go
+new file mode 100644
+index 0000000..f93703d
+--- /dev/null
++++ b/ui/prewarm_windows.go
+@@ -0,0 +1,5 @@
++package ui
++
++import "github.com/egoist/mygo/internal/gpu/d3d11"
++
++func prewarm() { go d3d11.Prewarm() }
+diff --git a/ui/runtime.go b/ui/runtime.go
+index d557a93..178d629 100644
+--- a/ui/runtime.go
++++ b/ui/runtime.go
+@@ -542,6 +542,9 @@ type engine struct {
+ 	live liveState
+ 	// stats measures frames for MYGO_FRAME_STATS, nil when it is unset.
+ 	stats *frameStats
++	// presented are the functions to run once the frame is presented
++	// (Context.OnPresented).
++	presented []func()
+ 	// dropOver is the element files are dragged over; access is true once
+ 	// assistive technology asked for the content, and accessNodes is how
+ 	// many nodes the last frame's tree had.
+@@ -879,6 +882,13 @@ func (rt *engine) runFrame() {
+ 		rt.host.setMaximizeButton(r)
+ 	}
+ 	rt.stats.lap(phasePresent)
++	if len(rt.presented) > 0 {
++		fns := rt.presented
++		rt.presented = nil
++		for _, fn := range fns {
++			fn()
++		}
++	}
+ 	rt.prune()
+ 	rt.syncDropFormats()
+ 	rt.prunePictures()
+diff --git a/ui/table.go b/ui/table.go
+index f83633c..1b4f62a 100644
+--- a/ui/table.go
++++ b/ui/table.go
+@@ -343,6 +343,9 @@ func table(c *context, s *ListState, columns []TableColumn, n int, cell func(row
+ 			row := coreRow(c).MinHeight(tableRow).AlignItems(Stretch)
+ 			// The list's element holding the row is the row.
+ 			row.Role(RoleNone)
++			if s.RowBuilt != nil {
++				s.RowBuilt(wrapElement(row), i)
++			}
+ 			if s.Header != nil && s.Header(i) {
+ 				row.Padding(t.Space(1.5), t.Space(2.5)).AlignItems(Center).Background(t.Surface).FontWeight(600)
+ 				row.Children(func() { cell(i, 0) })
+diff --git a/ui/tester_drag.go b/ui/tester_drag.go
+new file mode 100644
+index 0000000..0d3c4d3
+--- /dev/null
++++ b/ui/tester_drag.go
+@@ -0,0 +1,57 @@
++package ui
++
++import (
++	"github.com/egoist/mygo/internal/platform"
++	"github.com/egoist/mygo/transfer"
++)
++
++// DragData returns the data of the native drag the view started, as a
++// press on an element with DragData that moved, and whether one is under
++// way; the operations are those its source allows.
++func (t *Tester) DragData() (data transfer.Data, operations transfer.Operation, dragging bool) {
++	if len(t.h.dragData.Formats()) == 0 {
++		return transfer.Data{}, transfer.None, false
++	}
++	ops := t.h.dragOptions.Operations
++	if ops == transfer.None {
++		ops = transfer.Copy
++	}
++	return t.h.dragData, ops, true
++}
++
++// DragDataOver moves a native drag of data over (x, y), as one coming
++// from another window or application, and returns the operation the
++// element there would take it with, None when none takes it. suggested is
++// what the modifier keys held ask for, None for none.
++func (t *Tester) DragDataOver(x, y float32, data transfer.Data, operations, suggested transfer.Operation) transfer.Operation {
++	d := &platform.DataDragEvent{Offer: transfer.Offer{Formats: data.Formats(), Operations: operations, Suggested: suggested}}
++	t.rt.event(platform.SurfaceEvent{Kind: platform.DataDragOver, X: float64(x), Y: float64(y), Drag: d})
++	t.settle()
++	return d.Operation
++}
++
++// DropData drops data at (x, y), as a native drag let go there, and
++// returns the operation the element under it took the data with, None
++// when none did. It ends the drag the view started, if any, with that
++// operation, as the system tells a source what became of its drag.
++func (t *Tester) DropData(x, y float32, data transfer.Data, operations, suggested transfer.Operation) transfer.Operation {
++	d := &platform.DataDragEvent{Offer: transfer.Offer{Formats: data.Formats(), Operations: operations, Suggested: suggested}}
++	t.rt.event(platform.SurfaceEvent{Kind: platform.DataDragOver, X: float64(x), Y: float64(y), Drag: d})
++	d.Data = data
++	taken := t.rt.event(platform.SurfaceEvent{Kind: platform.DataDrop, X: float64(x), Y: float64(y), Drag: d})
++	op := d.Operation
++	if !taken {
++		op = transfer.None
++	}
++	if len(t.h.dragData.Formats()) > 0 {
++		t.h.finishDataDrag(transfer.Result{Operation: op, Canceled: op == transfer.None})
++	}
++	t.settle()
++	return op
++}
++
++// WheelWith is Wheel with modifier keys held, as Ctrl and the wheel, which
++// zooms where an element's HandleInput takes it.
++func (t *Tester) WheelWith(mods Modifiers, x, y, dx, dy float32) {
++	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Mods: platform.Modifiers(mods)})
++}

@@ -1,0 +1,12 @@
+# Folders the benchmarks enter, one a line: small and large, of
+# directories and of files, on both drives.
+C:\Windows
+C:\Windows\System32
+C:\Users\fish
+C:\Windows\WinSxS
+D:\Code
+C:\Program Files
+C:\Windows\System32\drivers
+D:\Downloads
+C:\Windows\Fonts
+C:\Windows\SysWOW64
