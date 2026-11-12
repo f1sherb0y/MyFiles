@@ -3,6 +3,8 @@ package shell
 import (
 	"errors"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -91,6 +93,14 @@ func open(owner Window, path, dir string) error {
 }
 
 func openDefault(owner Window, path, dir string) error {
+	if needsChoice(path) {
+		// Several programs offer to open the type and the user chose
+		// none yet: the system would ask which, in a dialog that the
+		// quiet way of opening keeps from showing, so that nothing
+		// happens and no error tells of it (Windows 11 26300, 2026-11).
+		// The dialog is asked for outright.
+		return errNoProgram
+	}
 	return onSTA(func() error {
 		err := execute(owner, "", path, dir, seeMaskInvokeIDList|seeMaskNoAsync|seeMaskNoUI)
 		if errors.Is(err, windows.ERROR_NO_ASSOCIATION) {
@@ -153,4 +163,30 @@ func dataObject(paths []string) (*object, error) {
 	err := items.call(bindToHandler, 0, uintptr(unsafe.Pointer(&bhidDataObject)),
 		uintptr(unsafe.Pointer(&iidDataObject)), uintptr(unsafe.Pointer(&data))).err()
 	return data, err
+}
+
+var procAssocQueryStringW = windows.NewLazySystemDLL("shlwapi.dll").NewProc("AssocQueryStringW")
+
+// needsChoice reports whether opening a file would have the system ask
+// which program to open it with: what opens its type is the system's
+// own chooser.
+func needsChoice(path string) bool {
+	ext := filepath.Ext(path)
+	if ext == "" {
+		return false
+	}
+	dot, err := windows.UTF16PtrFromString(ext)
+	if err != nil {
+		return false
+	}
+	verb, _ := windows.UTF16PtrFromString("open")
+	var buf [1024]uint16
+	n := uint32(len(buf))
+	const executable = 2
+	hr, _, _ := procAssocQueryStringW.Call(0, executable, uintptr(unsafe.Pointer(dot)), uintptr(unsafe.Pointer(verb)),
+		uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&n)))
+	if int32(hr) < 0 {
+		return false
+	}
+	return strings.EqualFold(filepath.Base(windows.UTF16ToString(buf[:])), "OpenWith.exe")
 }
