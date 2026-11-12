@@ -1,0 +1,58 @@
+name: Release
+
+# Pushing a tag like v0.2.0 builds the installer at that version and
+# publishes it on the release page.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Fetch MyGo and apply the patch
+        shell: pwsh
+        run: .\tools\setup-mygo.ps1
+      - name: Take the version from the tag
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+') { throw "the tag ${{ github.ref_name }} is no version" }
+          $utf8 = New-Object System.Text.UTF8Encoding $false
+          foreach ($edit in @(
+              @{ file = 'cmd\myfiles\mygo.json'; find = '"version":\s*"[^"]*"'; put = "`"version`": `"$version`"" },
+              @{ file = 'internal\app\app.go'; find = 'var Version = "[^"]*"'; put = "var Version = `"$version`"" })) {
+            $path = Join-Path $PWD $edit.file
+            $text = [IO.File]::ReadAllText($path, $utf8)
+            if ($text -notmatch $edit.find) { throw "no version to set in $($edit.file)" }
+            [IO.File]::WriteAllText($path, ($text -replace $edit.find, $edit.put), $utf8)
+          }
+          "VERSION=$version" >> $env:GITHUB_ENV
+      - name: Test
+        run: go test ./internal/...
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '0'
+          Push-Location third_party\mygo
+          go run .\cmd\mygo build ..\..\cmd\myfiles
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Pop-Location
+          Copy-Item bin\dist\windows-amd64\MyFiles.exe "bin\dist\windows-amd64\MyFiles-$env:VERSION-portable-amd64.exe"
+          Get-ChildItem bin\dist\windows-amd64
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = @(
+            "bin\dist\windows-amd64\myfiles-setup-$env:VERSION-amd64.exe",
+            "bin\dist\windows-amd64\MyFiles-$env:VERSION-portable-amd64.exe")
+          gh release create '${{ github.ref_name }}' @files --title "MyFiles $env:VERSION" --generate-notes

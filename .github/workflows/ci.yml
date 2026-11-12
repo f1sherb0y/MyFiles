@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Fetch MyGo and apply the patch
+        shell: pwsh
+        run: .\tools\setup-mygo.ps1
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./internal/...
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '0'
+          Push-Location third_party\mygo
+          go run .\cmd\mygo build ..\..\cmd\myfiles
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Pop-Location
+          Get-ChildItem bin\dist\windows-amd64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: myfiles-windows-amd64
+          path: |
+            bin/dist/windows-amd64/myfiles-setup-*.exe
+            bin/dist/windows-amd64/MyFiles.exe
+          if-no-files-found: error
