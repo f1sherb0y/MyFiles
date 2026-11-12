@@ -70,6 +70,7 @@ var (
 	icoForward     = svg(`<path d="M6.5 3.5L11 8l-4.5 4.5"/>`)
 	icoUp          = svg(`<path d="M8 13V3.5M3.5 8L8 3.5 12.5 8"/>`)
 	icoRefresh     = svg(`<path d="M13 8a5 5 0 1 1-1.5-3.55M13 2.5v3h-3"/>`)
+	icoUpdate      = svg(`<path d="M8 2.5v7.5M4.75 6.75L8 10l3.25-3.25M3 13h10"/>`)
 	icoPlus        = svg(`<path d="M8 3.5v9M3.5 8h9"/>`)
 	icoClose       = svg(`<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>`)
 	icoChevron     = svg(`<path d="M6 4l4 4-4 4"/>`)

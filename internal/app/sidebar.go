@@ -56,8 +56,10 @@ func (w *Window) sidebar(c *ui.Context) {
 	ui.Column(c.Key("sidebar")).Grow(1).MinWidth(0).MinHeight(0).Background(th.Surface).Children(func() {
 		// Along the top of the window, the sidebar is its title bar too.
 		bar := c.TitleBar()
-		ui.Row(c.Key("title")).Height(stripHeight).Shrink(0).DragWindow().Padding(0, 10, 0, max(bar.Left, 10)).Children(func() {
-			ui.Text(c, "MyFiles").FontWeight(600).TextColor(th.TextMuted).SingleLine()
+		ui.Row(c.Key("title")).Height(stripHeight).Shrink(0).DragWindow().Padding(0, 10, 0, max(bar.Left, 10)).Gap(10).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, "MyFiles").FontWeight(600).TextColor(th.TextMuted).SingleLine().Shrink(0)
+			// A newer version in place: beside the name, where it is seen.
+			w.updateButton(c)
 		})
 		ui.Scroll(c.Key("places")).Grow(1).MinHeight(0).Padding(2, 4, 8, 4).Children(func() {
 			// The folders every user has, then those the user chose.
@@ -90,9 +92,6 @@ func (w *Window) sidebar(c *ui.Context) {
 				w.tree(c, shell.Linux, 0, at)
 			}
 		})
-		if a.updateReady != "" {
-			ui.Row(c.Key("update")).Shrink(0).Padding(6, 8).Children(func() { w.updateButton(c) })
-		}
 	})
 }
 

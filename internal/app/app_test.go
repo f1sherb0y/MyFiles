@@ -817,7 +817,9 @@ func TestUpdateButton(t *testing.T) {
 		h.tt.Frame()
 		h.settle()
 		r, ok := h.tt.Find("Restart to Update")
-		if !ok || r.Y < 500 || r.X > 200 {
+		// Beside the program's name, top left; without the sidebar, which
+		// has the name, in the bottom left corner.
+		if !ok || r.X > 200 || sidebar && r.Y > 30 || !sidebar && r.Y < 500 {
 			t.Fatalf("with the sidebar %v, the button is at %v (found %v)", sidebar, r, ok)
 		}
 	}

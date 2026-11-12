@@ -9,11 +9,10 @@ import (
 	"myfiles/cmd/myfiles/locales"
 )
 
-// Updates are looked for a moment after the program starts, not to be in
-// its way, and then every few hours for as long as it runs: a file
-// manager stays open for days.
+// Updates are looked for as the program starts, on another thread, which
+// is not in its way, and then every few hours for as long as it runs: a
+// file manager stays open for days.
 const (
-	updateFirst = 8 * time.Second
 	updateEvery = 6 * time.Hour
 	// updateLimit is how long a check and its download may take.
 	updateLimit = 15 * time.Minute
@@ -21,12 +20,12 @@ const (
 
 // watchUpdates looks for newer versions from now on.
 func (a *App) watchUpdates() {
-	time.AfterFunc(updateFirst, func() {
-		a.desk.post(a.checkUpdate)
+	a.desk.post(a.checkUpdate)
+	go func() {
 		for range time.Tick(updateEvery) {
 			a.desk.post(a.checkUpdate)
 		}
-	})
+	}()
 }
 
 // checkUpdate looks for a newer version, on the main thread, unless the
@@ -66,10 +65,16 @@ func (w *Window) updateButton(c *ui.Context) {
 		return
 	}
 	th := c.Theme()
-	b := ui.ButtonBase(c.Key("restart")).Height(statusHeight+2).Padding(0, 8).Radius(4).Shrink(0).Center().
+	b := ui.ButtonBase(c.Key("restart")).Height(22).Padding(0, 9, 0, 7).Gap(5).Radius(11).Shrink(0).Center().
 		Background(th.Accent).Tooltip(locales.UpdateRestartTip(a.updateReady)).TabStop(false)
+	b.Draw(func(p *ui.Painter, r ui.Rect) {
+		if b.Hovered() {
+			p.Fill(r, th.AccentText.Alpha(0.14), 11)
+		}
+	})
 	b.Children(func() {
-		ui.Text(c, locales.UpdateRestart()).SingleLine().FontSize(th.FontSize - 1).FontWeight(600).TextColor(th.AccentText)
+		ui.Icon(c, icoUpdate).FontSize(13).TextColor(th.AccentText)
+		ui.Text(c, locales.UpdateRestart()).SingleLine().FontWeight(600).TextColor(th.AccentText)
 	})
 	if b.Clicked() {
 		// The tabs come back: the session is written as the windows close.
