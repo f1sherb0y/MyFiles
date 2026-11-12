@@ -1,6 +1,26 @@
-# MyFiles
+<p align="center">
+  <img src="docs/images/logo.png" width="112" alt="MyFiles">
+</p>
+
+<h1 align="center">MyFiles</h1>
+
+<p align="center">
+  <a href="https://github.com/f1sherb0y/MyFiles/releases/latest">下载安装包</a>
+</p>
 
 一个快、紧凑的 Windows 文件管理器，用来替代资源管理器。界面用 [MyGo](https://github.com/egoist/mygo) 的原生 UI 在 GPU 上画，纯 Go，没有 cgo，单个 12 MB 的 exe。
+
+**浏览和切换视图**
+
+![进文件夹、切换视图、点地址栏回到上级](docs/images/browse.gif)
+
+**分屏和设置标签页**
+
+![向右、向下分屏，各看各的文件夹；设置是一个标签页](docs/images/split.gif)
+
+**输入地址和过滤**
+
+![地址栏变成输入框，输入路径；过滤当前文件夹](docs/images/address.gif)
 
 - **快**：进一个文件夹，从发出导航到画面交给显示，本地磁盘上是 3–7 ms（5,000 项的 System32 约 6 ms，26,000 项的 WinSxS 约 25 ms）。同一台机器上 Explorer++ 是 53 ms–14.8 s，最小差距 16 倍；测法和完整数字见 [docs/benchmark.md](docs/benchmark.md)。文件夹的第一帧尽量就是最终的画面：见过的类型的图标和类型名直接在，没见过的最多等 10 ms，不会先排错列数再跳一下。
 - **标签 + 分屏**：把标签拖到窗格的上、下、左、右边缘就分屏，拖到别的窗格就并过去，像窗口贴靠。
@@ -9,6 +29,10 @@
 - **多种视图**：详细信息、列表、平铺、中 / 大 / 超大图标；图标视图里图片和视频显示缩略图。
 - **安静**：没有导航的咔哒声，没有按键的叮声。
 - **可以设成默认文件管理器**，也可以随时还原。
+
+## 安装
+
+到 [Releases](https://github.com/f1sherb0y/MyFiles/releases/latest) 下载 `myfiles-setup-<版本>-amd64.exe` 运行即可，只装给当前用户，不需要管理员权限；同一页的 `MyFiles-<版本>-portable-amd64.exe` 是免安装的单个文件。安装包没有代码签名，Windows 可能会提示「未知发布者」。
 
 ## 构建和运行
 
