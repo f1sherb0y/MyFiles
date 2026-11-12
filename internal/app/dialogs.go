@@ -104,8 +104,10 @@ func (w *Window) register(d shell.Default) {
 }
 
 // dialogs builds what shows over the window: the question asked before
-// something that cannot be undone.
+// something that cannot be undone, and the one which program opens a
+// file.
 func (w *Window) dialogs(c *ui.Context) {
+	w.chooserDialog(c)
 	if q := w.ask; q != nil {
 		switch ui.AlertDialog(c, &q.open, q.title, q.message, locales.Cancel(), q.confirm) {
 		case 1:

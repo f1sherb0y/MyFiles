@@ -468,8 +468,7 @@ func (w *Window) openEntry(t *Tab, e *fsys.Entry) {
 		w.navigate(t, path, navPush, "")
 		return
 	}
-	dir, owner := t.Path, w.handle()
-	go func() { w.report(w.app.desk.open(owner, path, dir)) }()
+	w.openFile(path, t.Path)
 }
 
 // goTo shows what the user typed in the address bar: a folder, or a

@@ -51,9 +51,10 @@ type desktop interface {
 	languages() []string
 	chosenLocale() string
 	setLocale(tag string)
-	// apps lists the programs that open a file, off the main thread, and
-	// menuIcon makes of a PNG picture an icon a menu's item shows.
-	apps(path string) []shell.App
+	// apps lists the programs the system recommends for opening a file,
+	// or all that open files, off the main thread, and menuIcon makes of
+	// a PNG picture an icon a menu's item shows.
+	apps(path string, all bool) []shell.App
 	menuIcon(png []byte) (ui.MenuIcon, error)
 	// What the sidebar shows of the system, read off the main thread:
 	// what it calls a folder or a place, the folders of its file manager's
@@ -86,11 +87,10 @@ type desktop interface {
 	// What follows shows something of the system's or starts another
 	// program: tests must never do either.
 
-	// open opens a file with its program, started in dir.
+	// open opens a file with its program, started in dir, or returns
+	// shell.ErrChoose for one no program is set to open; openIn opens
+	// it with one of those apps lists.
 	open(owner shell.Window, path, dir string) error
-	// openWith asks, in the system's dialog, which program opens a file,
-	// and openIn opens it with one of those apps lists.
-	openWith(owner shell.Window, path string) error
 	openIn(owner shell.Window, path string, app shell.App) error
 	properties(owner shell.Window, paths []string) error
 	// systemMenu shows the system's context menu where the pointer is.
@@ -119,8 +119,6 @@ func (system) writeText(s string) { mygo.Clipboard.WriteText(s) }
 func (system) open(owner shell.Window, path, dir string) error {
 	return shell.Open(owner, path, dir)
 }
-
-func (system) openWith(owner shell.Window, path string) error { return shell.OpenWith(owner, path) }
 
 func (system) update(ctx context.Context) (string, func(context.Context) error, error) {
 	if !mygo.Updater.Enabled() {
@@ -169,7 +167,12 @@ func (system) languages() []string  { return mygo.App.Languages() }
 func (system) chosenLocale() string { return mygo.App.ChosenLocale() }
 func (system) setLocale(tag string) { mygo.App.SetLocale(tag) }
 
-func (system) apps(path string) []shell.App { return shell.Apps(path) }
+func (system) apps(path string, all bool) []shell.App {
+	if all {
+		return shell.AllApps(path)
+	}
+	return shell.Apps(path)
+}
 
 func (system) loadMenu(owner shell.Window, paths []string, background string) (systemItems, error) {
 	menu, err := shell.LoadMenu(owner, paths, background)

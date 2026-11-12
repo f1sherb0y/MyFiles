@@ -417,7 +417,7 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 				m.Separator()
 			}
 			if m.Item(locales.MenuOpenWithOther()).Chosen() {
-				w.openWith(path)
+				w.choose(path, false)
 			}
 		})
 	}

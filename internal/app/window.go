@@ -60,6 +60,8 @@ type Window struct {
 
 	// ask is the question in the window, nil for none.
 	ask *question
+	// pick is the question which program opens a file, while it shows.
+	pick *chooser
 
 	// places and volumes are what the sidebar lists, read off the main
 	// thread; sidebarAt is when.

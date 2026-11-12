@@ -72,6 +72,8 @@ type fakeDesk struct {
 	launched []string
 	// menus counts the system's menus read.
 	menus int
+	// gone is the ID of a program that is no longer installed.
+	gone string
 }
 
 func (d *fakeDesk) post(fn func()) { d.frame.Update(fn) }
@@ -99,18 +101,26 @@ func (d *fakeDesk) setLocale(tag string) { d.locale = tag }
 // Nothing of the system's shows in a test, and no program starts: what
 // would have is noted.
 func (d *fakeDesk) open(_ shell.Window, path, _ string) error {
+	if strings.HasSuffix(path, ".pic") {
+		// A type no program is set to open.
+		d.note("ask " + path)
+		return shell.ErrChoose
+	}
 	d.note("open " + path)
 	return nil
 }
-func (d *fakeDesk) openWith(_ shell.Window, path string) error {
-	d.note("open with " + path)
-	return nil
-}
-func (d *fakeDesk) apps(path string) []shell.App {
-	if strings.HasSuffix(path, ".txt") {
-		return []shell.App{{Name: "Notes", ID: "notes.exe"}, {Name: "Editor", ID: "editor.exe"}}
+func (d *fakeDesk) apps(path string, all bool) []shell.App {
+	var apps []shell.App
+	switch {
+	case strings.HasSuffix(path, ".txt"):
+		apps = []shell.App{{Name: "Notes", ID: "notes.exe"}, {Name: "Editor", ID: "editor.exe"}}
+	case strings.HasSuffix(path, ".pic"):
+		apps = []shell.App{{Name: "Viewer", ID: "viewer.exe"}, {Name: "Painter", ID: "painter.exe"}}
 	}
-	return nil
+	if all {
+		apps = append(apps, shell.App{Name: "Browser", ID: "browser.exe"})
+	}
+	return apps
 }
 func (d *fakeDesk) menuIcon([]byte) (ui.MenuIcon, error) { return nil, nil }
 
@@ -148,6 +158,12 @@ func (m *fakeMenu) Invoke(id int) (shell.MenuAction, error) {
 }
 func (m *fakeMenu) Close() {}
 func (d *fakeDesk) openIn(_ shell.Window, path string, app shell.App) error {
+	d.mu.Lock()
+	gone := app.ID == d.gone
+	d.mu.Unlock()
+	if gone {
+		return shell.ErrChoose
+	}
 	d.note("open " + path + " in " + app.ID)
 	return nil
 }

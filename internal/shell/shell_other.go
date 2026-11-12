@@ -75,9 +75,7 @@ func typeName(ext string, dir bool) string { return "" }
 
 func open(owner Window, path, dir string) error { return ErrUnsupported }
 
-func openWith(owner Window, path string) error { return ErrUnsupported }
-
-func apps(path string) []App { return nil }
+func apps(path string, all bool) []App { return nil }
 
 func openIn(owner Window, path string, app App) error { return ErrUnsupported }
 

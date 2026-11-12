@@ -664,6 +664,56 @@ func (msgs Messages) MenuOpenWithOther() string {
 	return Catalog.Format(msgs.locale, "menuOpenWithOther", nil)
 }
 
+// ChooserTitle says "Open “{name}” with"
+// in the language the app shows.
+func ChooserTitle(name string) string { return In(i18n.Locale()).ChooserTitle(name) }
+
+// ChooserTitle says "Open “{name}” with"
+// in the language of msgs.
+func (msgs Messages) ChooserTitle(name string) string {
+	return Catalog.Format(msgs.locale, "chooserTitle", map[string]any{"name": name})
+}
+
+// ChooserNone says "No app that opens this file was found."
+// in the language the app shows.
+func ChooserNone() string { return In(i18n.Locale()).ChooserNone() }
+
+// ChooserNone says "No app that opens this file was found."
+// in the language of msgs.
+func (msgs Messages) ChooserNone() string {
+	return Catalog.Format(msgs.locale, "chooserNone", nil)
+}
+
+// ChooserMore says "More Apps"
+// in the language the app shows.
+func ChooserMore() string { return In(i18n.Locale()).ChooserMore() }
+
+// ChooserMore says "More Apps"
+// in the language of msgs.
+func (msgs Messages) ChooserMore() string {
+	return Catalog.Format(msgs.locale, "chooserMore", nil)
+}
+
+// ChooserAlways says "Always use this app for {ext} files"
+// in the language the app shows.
+func ChooserAlways(ext string) string { return In(i18n.Locale()).ChooserAlways(ext) }
+
+// ChooserAlways says "Always use this app for {ext} files"
+// in the language of msgs.
+func (msgs Messages) ChooserAlways(ext string) string {
+	return Catalog.Format(msgs.locale, "chooserAlways", map[string]any{"ext": ext})
+}
+
+// ChooserGone says "{name} is no longer available."
+// in the language the app shows.
+func ChooserGone(name string) string { return In(i18n.Locale()).ChooserGone(name) }
+
+// ChooserGone says "{name} is no longer available."
+// in the language of msgs.
+func (msgs Messages) ChooserGone(name string) string {
+	return Catalog.Format(msgs.locale, "chooserGone", map[string]any{"name": name})
+}
+
 // MenuCut says "Cut"
 // in the language the app shows.
 func MenuCut() string { return In(i18n.Locale()).MenuCut() }

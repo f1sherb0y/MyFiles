@@ -473,9 +473,22 @@ func TestContextMenus(t *testing.T) {
 	if err := h.tt.ChooseMenuItem("Open With", "Choose Another App…"); err != nil {
 		t.Fatalf("%v: %q", err, h.tt.Menu())
 	}
-	h.wait("the dialog", func() bool {
-		return slices.Contains(h.desk.launches(), "open with "+h.path("one.txt"))
+	// The programs are asked about in the window, the recommended ones
+	// first and the others on demand; one chosen so opens the file this
+	// once.
+	h.wait("the programs to choose from", func() bool { _, ok := h.tt.Find("More Apps"); return ok })
+	if _, ok := h.tt.Find("Browser"); ok {
+		t.Error("every program is listed before it is asked for")
+	}
+	h.click("More Apps")
+	h.wait("every program", func() bool { _, ok := h.tt.Find("Browser"); return ok })
+	h.click("Browser")
+	h.wait("the file to open", func() bool {
+		return slices.Contains(h.desk.launches(), "open "+h.path("one.txt")+" in browser.exe")
 	})
+	if h.w.pick != nil || len(h.a.set.OpenWith) != 0 {
+		t.Errorf("after choosing once: asking %v, kept %v", h.w.pick != nil, h.a.set.OpenWith)
+	}
 
 	// What the system and other programs have for the file is under
 	// More, drawn here: without what the menu has itself, with its
@@ -523,6 +536,63 @@ func TestContextMenus(t *testing.T) {
 // it lets go of what was chosen, and dragged it chooses the entries its
 // rectangle touches, added to those chosen when Ctrl is held. A press on
 // an entry stays the entry's.
+// A file of a type no program is set to open is asked about in the
+// window, and the answer kept for the type.
+func TestChooseProgram(t *testing.T) {
+	h := newHarness(t, "one.pic", "two.pic", "three.txt")
+	opened := func(what string) func() bool {
+		return func() bool { return slices.Contains(h.desk.launches(), what) }
+	}
+	h.doubleClick("three.txt")
+	h.wait("a file with a program to open", opened("open "+h.path("three.txt")))
+	if h.w.pick != nil {
+		t.Fatal("a file with a program was asked about")
+	}
+
+	h.doubleClick("one.pic")
+	h.wait("the question", func() bool { _, ok := h.tt.Find("Painter"); return ok })
+	h.desk.launches()
+	// Escape gives it up, and nothing opens.
+	h.key(0, ui.KeyEscape)
+	if h.w.pick != nil {
+		t.Fatal("Escape left the question open")
+	}
+	// The keyboard is back with the files: Enter opens the one chosen.
+	h.key(0, ui.KeyEnter)
+	h.wait("the question again", func() bool { _, ok := h.tt.Find("Painter"); return ok })
+	h.desk.launches()
+	// The arrows go through the programs, and Enter takes one.
+	h.key(0, ui.KeyDown)
+	h.key(0, ui.KeyEnter)
+	h.wait("the file to open in the program chosen", opened("open "+h.path("one.pic")+" in painter.exe"))
+	if h.w.pick != nil {
+		t.Error("the question stays after its answer")
+	}
+	if got := h.a.set.OpenWith[".pic"]; got != "painter.exe" {
+		t.Errorf("the program kept for the type is %q", got)
+	}
+
+	// The next file of the type opens without a question.
+	h.doubleClick("two.pic")
+	h.wait("another file of the type", opened("open "+h.path("two.pic")+" in painter.exe"))
+	if h.w.pick != nil {
+		t.Error("a type with a program kept was asked about")
+	}
+
+	// Once the program is gone, the question comes back.
+	h.desk.mu.Lock()
+	h.desk.gone = "painter.exe"
+	h.desk.mu.Unlock()
+	h.key(0, ui.KeyEnter)
+	h.wait("the question, the program being gone", func() bool { _, ok := h.tt.Find("Viewer"); return ok })
+	if got := h.a.set.OpenWith[".pic"]; got != "" {
+		t.Errorf("a program that is gone is still kept: %q", got)
+	}
+	h.click("Viewer")
+	h.wait("the file to open", opened("open "+h.path("two.pic")+" in viewer.exe"))
+	h.desk.launches()
+}
+
 func TestEmptyRoom(t *testing.T) {
 	for _, mode := range []viewMode{viewDetails, viewList, viewIcons} {
 		t.Run(viewSpecs[mode].id, func(t *testing.T) {

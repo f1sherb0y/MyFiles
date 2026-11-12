@@ -74,6 +74,7 @@ var (
 	icoPlus        = svg(`<path d="M8 3.5v9M3.5 8h9"/>`)
 	icoClose       = svg(`<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>`)
 	icoChevron     = svg(`<path d="M6 4l4 4-4 4"/>`)
+	icoCheck       = svg(`<path d="M3.5 8.5l3 3 6-7"/>`)
 	icoChevronDown = svg(`<path d="M4 6l4 4 4-4"/>`)
 	icoSettings    = svg(`<path d="M2.5 5h5M11 5h2.5M2.5 11h2.5M8.5 11h5"/><circle cx="9.25" cy="5" r="1.75"/><circle cx="6.75" cy="11" r="1.75"/>`)
 	icoSidebar     = svg(`<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.25 3v10"/>`)

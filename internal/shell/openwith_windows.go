@@ -4,7 +4,6 @@ import (
 	"image"
 	_ "image/png" // the icons of programs from the Store
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"unsafe"
@@ -18,10 +17,9 @@ import (
 var (
 	shlwapi = windows.NewLazySystemDLL("shlwapi.dll")
 
-	procSHAssocEnumHandlers      = shell32.NewProc("SHAssocEnumHandlers")
-	procSHDefExtractIconW        = shell32.NewProc("SHDefExtractIconW")
-	procSHLoadIndirectString     = shlwapi.NewProc("SHLoadIndirectString")
-	procAllowSetForegroundWindow = user32.NewProc("AllowSetForegroundWindow")
+	procSHAssocEnumHandlers  = shell32.NewProc("SHAssocEnumHandlers")
+	procSHDefExtractIconW    = shell32.NewProc("SHDefExtractIconW")
+	procSHLoadIndirectString = shlwapi.NewProc("SHLoadIndirectString")
 )
 
 // The methods of IEnumAssocHandlers and IAssocHandler, by their place in
@@ -36,16 +34,20 @@ const (
 )
 
 // handlers calls each with the programs registered to open files with an
-// extension, the ones the system recommends, in its order, until each
-// returns false. The objects are released after the call.
-func handlers(ext string, each func(h *object) bool) error {
+// extension, in the system's order, until each returns false: the ones
+// the system recommends for it, or, with all, every program that opens
+// files of any type. The objects are released after the call.
+func handlers(ext string, all bool, each func(h *object) bool) error {
 	p, err := windows.UTF16PtrFromString(ext)
 	if err != nil {
 		return err
 	}
-	const recommended = 1 // ASSOC_FILTER_RECOMMENDED
+	filter := uintptr(1) // ASSOC_FILTER_RECOMMENDED
+	if all {
+		filter = 0 // ASSOC_FILTER_NONE
+	}
 	var enum *object
-	hr, _, _ := procSHAssocEnumHandlers.Call(uintptr(unsafe.Pointer(p)), recommended, uintptr(unsafe.Pointer(&enum)))
+	hr, _, _ := procSHAssocEnumHandlers.Call(uintptr(unsafe.Pointer(p)), filter, uintptr(unsafe.Pointer(&enum)))
 	if err := hresult(hr).err(); err != nil {
 		return err
 	}
@@ -80,21 +82,41 @@ func handlerString(h *object, method int) string {
 // shows at 16 DIPs on a screen of twice the pixels.
 const appIconSize = 32
 
-func apps(path string) []App {
-	ext := fsys.ExtOf(fsys.Base(path))
-	if ext == "" {
-		return nil
+// handlersExt is the extension the programs for a file are asked for
+// by: its own, or, for a file without one, a dot alone, for which the
+// system recommends none and lists all.
+func handlersExt(path string) string {
+	if ext := fsys.ExtOf(fsys.Base(path)); ext != "" {
+		return ext
 	}
+	return "."
+}
+
+// appsMost is how many programs are listed at most.
+const appsMost = 96
+
+func apps(path string, all bool) []App {
+	ext := handlersExt(path)
 	var out []App
-	_ = onSTA(func() error {
-		return handlers(ext, func(h *object) bool {
+	seen := map[string]bool{}
+	list := func(all bool) error {
+		return handlers(ext, all, func(h *object) bool {
 			app := App{ID: handlerString(h, handlerGetName), Name: handlerString(h, handlerGetUIName)}
-			if app.ID != "" && app.Name != "" {
+			if app.ID != "" && app.Name != "" && !seen[app.ID] {
+				seen[app.ID] = true
 				app.Icon = handlerIcon(h, app.ID)
 				out = append(out, app)
 			}
-			return len(out) < 24
+			return len(out) < appsMost
 		})
+	}
+	_ = onSTA(func() error {
+		// The recommended ones come first in a list of all.
+		err := list(false)
+		if all {
+			err = list(true)
+		}
+		return err
 	})
 	return out
 }
@@ -180,7 +202,7 @@ func extractIcon(path string, index int32, px int) *image.RGBA {
 // openIn runs on a host thread: a program started may talk to the thread
 // that started it for a while.
 func openIn(owner Window, path string, app App) error {
-	ext := fsys.ExtOf(fsys.Base(path))
+	ext := handlersExt(path)
 	return onHost(func() error {
 		data, err := dataObject([]string{path})
 		if err != nil {
@@ -189,44 +211,28 @@ func openIn(owner Window, path string, app App) error {
 		defer data.release()
 		found := false
 		var invoked error
-		err = handlers(ext, func(h *object) bool {
+		invoke := func(h *object) bool {
 			if handlerString(h, handlerGetName) != app.ID {
 				return true
 			}
 			found = true
 			invoked = h.call(handlerInvoke, uintptr(unsafe.Pointer(data))).err()
 			return false
-		})
+		}
+		// Among the recommended ones, most often; else among all.
+		if err = handlers(ext, false, invoke); err == nil && !found {
+			err = handlers(ext, true, invoke)
+		}
 		switch {
 		case err != nil:
 			return &fsys.PathError{Op: "open", Path: path, Err: err}
 		case !found:
-			return &fsys.PathError{Op: "open", Path: path, Err: windows.ERROR_NO_ASSOCIATION}
+			// The program is no longer there to open such files.
+			return ErrChoose
 		case invoked != nil:
 			return &fsys.PathError{Op: "open", Path: path, Err: invoked}
 		}
 		dispatchMessages()
 		return nil
 	})
-}
-
-// openWith starts the system's program that asks which program opens a
-// file, and opens it with the one chosen. The ways a program is meant to
-// ask for it do not work on current systems (Windows 11 26300, 2026-11):
-// the verb "openas" returns at once having shown nothing, and
-// SHOpenWithDialog fails with "the process has no package identity".
-func openWith(owner Window, path string) error {
-	dir, err := windows.GetSystemDirectory()
-	if err != nil {
-		return &fsys.PathError{Op: "open", Path: path, Err: err}
-	}
-	cmd := exec.Command(filepath.Join(dir, "OpenWith.exe"), path)
-	if err := cmd.Start(); err != nil {
-		return &fsys.PathError{Op: "open", Path: path, Err: err}
-	}
-	// Its window closes itself unless it is the one in front, which only
-	// the program in front can let it be.
-	procAllowSetForegroundWindow.Call(uintptr(cmd.Process.Pid))
-	go cmd.Wait()
-	return nil
 }

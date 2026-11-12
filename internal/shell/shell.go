@@ -83,12 +83,15 @@ func TypeName(ext string, dir bool) string { return typeName(ext, dir) }
 // double click in the system's file manager does. dir is the directory
 // the program starts in. What goes wrong is returned, and shown by
 // nothing: the system's message boxes, and their sounds, stay away. For a
-// file of a type no program opens, the system asks which should.
+// file of a type no program is set to open, it returns ErrChoose, and
+// shows nothing either: the system's dialog that asks which program to
+// use is not one a program can count on (see open).
 func Open(owner Window, path, dir string) error { return open(owner, path, dir) }
 
-// OpenWith asks the user which program opens the file, in the system's
-// dialog, and opens it with the one chosen.
-func OpenWith(owner Window, path string) error { return openWith(owner, path) }
+// ErrChoose is returned by Open for a file that no program which works
+// is set to open: the caller asks the user which of Apps should, and
+// opens it with OpenIn.
+var ErrChoose = errors.New("shell: no program is set to open the file")
 
 // App is a program that opens files of a type: Name is what the system
 // calls it, ID tells it from the others, and Icon is its icon, nil for a
@@ -101,9 +104,16 @@ type App struct {
 // Apps lists the programs the system recommends for opening a file, by
 // its extension, in the system's order: none for a file without one. It
 // looks at no file, and takes a few milliseconds: not for the main thread.
-func Apps(path string) []App { return apps(path) }
+func Apps(path string) []App { return apps(path, false) }
 
-// OpenIn opens a file with one of the programs Apps listed.
+// AllApps lists every program that says it opens files, those the system
+// recommends for the file first: for a file the recommended ones do not
+// suit, or one with none. It takes longer than Apps.
+func AllApps(path string) []App { return apps(path, true) }
+
+// OpenIn opens a file with one of the programs Apps or AllApps listed,
+// which is told by its ID alone: for one that is no longer among them
+// it returns ErrChoose.
 func OpenIn(owner Window, path string, app App) error { return openIn(owner, path, app) }
 
 // Properties shows the system's properties of files or directories.

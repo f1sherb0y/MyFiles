@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 
 	"myfiles/internal/fsys"
 )
@@ -87,18 +88,21 @@ var errNoProgram = errors.New("no program opens the file")
 func open(owner Window, path, dir string) error {
 	err := openDefault(owner, path, dir)
 	if err == errNoProgram {
-		return openWith(owner, path)
+		// The system's dialog that asks which program to use is not
+		// started: a program cannot, here (OpenWith.exe ends at once
+		// with 0x80073D54, "the process has no package identity", and
+		// the verb "openas" shows nothing: Windows 11 26300, 2026-11).
+		// The caller asks, with the programs Apps lists.
+		return ErrChoose
 	}
 	return err
 }
 
 func openDefault(owner Window, path, dir string) error {
 	if needsChoice(path) {
-		// Several programs offer to open the type and the user chose
-		// none yet: the system would ask which, in a dialog that the
-		// quiet way of opening keeps from showing, so that nothing
-		// happens and no error tells of it (Windows 11 26300, 2026-11).
-		// The dialog is asked for outright.
+		// The system would ask which program to use, in a dialog that
+		// the quiet way of opening keeps from showing, so that nothing
+		// happens and no error tells of it.
 		return errNoProgram
 	}
 	return onSTA(func() error {
@@ -167,26 +171,59 @@ func dataObject(paths []string) (*object, error) {
 
 var procAssocQueryStringW = windows.NewLazySystemDLL("shlwapi.dll").NewProc("AssocQueryStringW")
 
-// needsChoice reports whether opening a file would have the system ask
-// which program to open it with: what opens its type is the system's
-// own chooser.
+// needsChoice reports whether no program that works is set to open a
+// file's type: what the system would start is its own dialog asking
+// which, or an app from the Store that is no longer installed, whose
+// name stays behind as the choice (opening such a file quietly did
+// nothing, and otherwise said "the package could not be found").
 func needsChoice(path string) bool {
 	ext := filepath.Ext(path)
 	if ext == "" {
 		return false
 	}
-	dot, err := windows.UTF16PtrFromString(ext)
+	const executable, progID = 2, 20 // ASSOCSTR_EXECUTABLE, ASSOCSTR_PROGID
+	if exe, ok := assocString(ext, executable); ok {
+		return strings.EqualFold(filepath.Base(exe), "OpenWith.exe")
+	}
+	// No executable to name: a shortcut, which the shell opens itself,
+	// or an app from the Store, started by its package.
+	id, ok := assocString(ext, progID)
+	if !ok || !strings.HasPrefix(id, "AppX") {
+		return false
+	}
+	k, err := registry.OpenKey(registry.CLASSES_ROOT, id+`\Shell\open`, registry.QUERY_VALUE)
 	if err != nil {
 		return false
+	}
+	pkg, _, err := k.GetStringValue("PackageId")
+	k.Close()
+	if err != nil || pkg == "" {
+		return false
+	}
+	// The packages installed for the user have a key each here.
+	const packages = `Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages\`
+	k, err = registry.OpenKey(registry.CURRENT_USER, packages+pkg, registry.QUERY_VALUE)
+	if err != nil {
+		return true
+	}
+	k.Close()
+	return false
+}
+
+// assocString asks the system something about what opens the files of
+// an extension.
+func assocString(ext string, what uintptr) (string, bool) {
+	dot, err := windows.UTF16PtrFromString(ext)
+	if err != nil {
+		return "", false
 	}
 	verb, _ := windows.UTF16PtrFromString("open")
 	var buf [1024]uint16
 	n := uint32(len(buf))
-	const executable = 2
-	hr, _, _ := procAssocQueryStringW.Call(0, executable, uintptr(unsafe.Pointer(dot)), uintptr(unsafe.Pointer(verb)),
+	hr, _, _ := procAssocQueryStringW.Call(0, what, uintptr(unsafe.Pointer(dot)), uintptr(unsafe.Pointer(verb)),
 		uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&n)))
 	if int32(hr) < 0 {
-		return false
+		return "", false
 	}
-	return strings.EqualFold(filepath.Base(windows.UTF16ToString(buf[:])), "OpenWith.exe")
+	return windows.UTF16ToString(buf[:]), true
 }

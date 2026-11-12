@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"errors"
 	"image/png"
 	"strings"
 	"time"
@@ -353,16 +354,17 @@ func (w *Window) folderProperties(t *Tab) {
 	go func() { w.report(w.app.desk.properties(owner, []string{path})) }()
 }
 
-// openWith asks which program opens a file.
-func (w *Window) openWith(path string) {
-	owner := w.handle()
-	go func() { w.report(w.app.desk.openWith(owner, path)) }()
-}
-
 // openIn opens a file with one of the programs for its type.
 func (w *Window) openIn(path string, app shell.App) {
 	owner := w.handle()
-	go func() { w.report(w.app.desk.openIn(owner, path, app)) }()
+	go func() {
+		err := w.app.desk.openIn(owner, path, app)
+		if err == shell.ErrChoose {
+			// Gone since it was listed.
+			err = errors.New(locales.ChooserGone(app.Name))
+		}
+		w.report(err)
+	}()
 }
 
 // appsFresh is how long the programs listed for a type are taken for the
@@ -400,7 +402,7 @@ func (w *Window) appsFor(path string) (*typeApps, bool) {
 	if time.Since(ta.asked) > appsFresh {
 		ta.asked = time.Now()
 		go func() {
-			apps := a.desk.apps(path)
+			apps := a.desk.apps(path, false)
 			pictures := make([][]byte, len(apps))
 			for i, app := range apps {
 				var buf bytes.Buffer

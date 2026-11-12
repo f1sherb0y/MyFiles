@@ -222,7 +222,17 @@ MyGo 的补丁里有两处是为这条路径加的：`Context.Rebuild`（一帧�
 
 右键菜单的「Open With」是子菜单（`shell/openwith_windows.go`）：`SHAssocEnumHandlers` 按扩展名列出系统推荐的程序，带图标，点了用 `IAssocHandler::Invoke` 打开。列表在菜单打开时在后台取，按扩展名缓存 30 秒。图标的位置由程序自己报：图标文件加序号的用 `SHDefExtractIcon`，商店应用报的是包里的资源名，用 `SHLoadIndirectString` 换成 PNG 文件再读。
 
-最后一项「Choose Another App…」启动系统的 `OpenWith.exe <文件>`。2026-11-12 在 Windows 11 26300 上试过的其他办法都不行：`ShellExecuteEx` 的 `openas` 动作 0.1 秒后返回成功但什么都不显示；`SHOpenWithDialog` 返回 0x80073D54（进程没有包标识）。`OpenWith.exe` 的窗口不在前台时会自己关掉（从后台脚本启动，1.5 秒时还在，2.5 秒时已退出），所以启动后对它调用 `AllowSetForegroundWindow`。这一项只在自动化驱动的窗口里试过，那种情况下 MyFiles 不在前台，对话框留不住；真实点击下是否留住还没有确认。
+最后一项「Choose Another App…」打开 MyFiles 自己的选择框（`app/chooser.go`），不用系统的。系统的选择框普通程序叫不出来，2026-11-12 在 Windows 11 26300 上试过的办法都不行：`ShellExecuteEx` 的 `openas` 动作 0.1 秒后返回成功但什么都不显示；`SHOpenWithDialog` 返回 0x80073D54（进程没有包标识）；直接启动 `OpenWith.exe <文件>`，进程同样以 0x80073D54 退出，只在任务栏闪一下图标。
+
+双击（`Window.openFile`）也走同一个选择框，顺序是：
+
+1. 用户在 MyFiles 里为这个扩展名选过程序（设置里的 `openWith`，扩展名 → 程序的 ID），就用它打开；程序已经不在了（`shell.OpenIn` 返回 `ErrChoose`）就忘掉这个选择，往下走。
+2. 否则问系统的默认程序。`shell.Open` 先自己判断这个默认能不能用（`needsChoice`）：`AssocQueryString` 查到的可执行文件是 `OpenWith.exe`，说明系统会弹选择框；查不到可执行文件、默认的 ProgId 是 `AppX…`、而它的 `PackageId` 在当前用户的包列表（`HKCU\Software\Classes\Local Settings\…\AppModel\Repository\Packages`）里没有，说明默认指向一个已卸载的商店应用。这两种情况都返回 `ErrChoose`。不这样先判断的话，静默方式的 `ShellExecuteEx` 会返回成功而什么都不做。查不到可执行文件的其他情况（比如 `.lnk`）照常交给 `ShellExecuteEx`。
+3. `ErrChoose` 时弹选择框：先列 `SHAssocEnumHandlers` 推荐的程序，「更多应用」再列全部（没有推荐的类型直接列全部，没有扩展名的文件按 `.` 查）。勾着「始终使用此应用」就把选择记进 `openWith`。从双击进来默认勾上，从菜单进来默认不勾。
+
+这个选择只在 MyFiles 里生效，不改系统的默认应用。实测有一个附带效果：某个类型在系统里没有用户选择时，用 `IAssocHandler::Invoke` 打开过一次之后，`AssocQueryString` 对这个类型就直接解析到那个程序了（2026-11-12 `.psd` → MyImages，注册表里没有出现 `UserChoice`）。
+
+这个流程用真实鼠标在真实窗口里验证过（`out/pickcheck.ps1`，2026-11-12）：双击 `.jpg`（默认指向已卸载的"照片"）和 `.psd` 都弹出选择框，点 MyImages 后 0.4 秒内打开；再双击另一个 `.jpg` 不再询问，直接打开。
 
 ### More 子菜单：自己画系统的右键菜单
 
