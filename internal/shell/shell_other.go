@@ -79,6 +79,8 @@ func apps(path string, all bool) []App { return nil }
 
 func openIn(owner Window, path string, app App) error { return ErrUnsupported }
 
+func setDefaultApp(path string, app App) error { return ErrUnsupported }
+
 func properties(owner Window, paths []string) error { return ErrUnsupported }
 
 func transfer(owner Window, sources []string, destDir string, move bool) error {

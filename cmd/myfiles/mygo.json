@@ -1,7 +1,7 @@
 {
   "name": "MyFiles",
   "identifier": "dev.myfiles.filemanager",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "icon": "../../internal/app/icon.png",
   "out": "../../bin/dist",
   "i18n": { "dir": "locales", "source": "en" },

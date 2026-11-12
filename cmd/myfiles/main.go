@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"myfiles/internal/app"
+	"myfiles/internal/assochash"
 	"myfiles/internal/cli"
 	"myfiles/internal/shell"
 )
@@ -27,6 +28,10 @@ func main() {
 	case cmd.Version:
 		attachConsole()
 		fmt.Println("myfiles", app.Version)
+		return
+	case cmd.Licenses:
+		attachConsole()
+		fmt.Print("UserChoiceLatestHash (cssxn)\n\n", assochash.License)
 		return
 	case cmd.SetDefault != "":
 		attachConsole()

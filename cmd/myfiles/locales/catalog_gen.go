@@ -694,14 +694,26 @@ func (msgs Messages) ChooserMore() string {
 	return Catalog.Format(msgs.locale, "chooserMore", nil)
 }
 
-// ChooserAlways says "Always use this app for {ext} files"
+// ChooserAlways says "Set as system default for {ext} files"
 // in the language the app shows.
 func ChooserAlways(ext string) string { return In(i18n.Locale()).ChooserAlways(ext) }
 
-// ChooserAlways says "Always use this app for {ext} files"
+// ChooserAlways says "Set as system default for {ext} files"
 // in the language of msgs.
 func (msgs Messages) ChooserAlways(ext string) string {
 	return Catalog.Format(msgs.locale, "chooserAlways", map[string]any{"ext": ext})
+}
+
+// ChooserDefaultFailed says "Could not set the Windows default for {ext}: {error}"
+// in the language the app shows.
+func ChooserDefaultFailed(ext string, error string) string {
+	return In(i18n.Locale()).ChooserDefaultFailed(ext, error)
+}
+
+// ChooserDefaultFailed says "Could not set the Windows default for {ext}: {error}"
+// in the language of msgs.
+func (msgs Messages) ChooserDefaultFailed(ext string, error string) string {
+	return Catalog.Format(msgs.locale, "chooserDefaultFailed", map[string]any{"ext": ext, "error": error})
 }
 
 // ChooserGone says "{name} is no longer available."

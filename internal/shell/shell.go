@@ -116,6 +116,10 @@ func AllApps(path string) []App { return apps(path, true) }
 // it returns ErrChoose.
 func OpenIn(owner Window, path string, app App) error { return openIn(owner, path, app) }
 
+// SetDefaultApp makes the selected app the current user's system default for
+// the file's extension. Call off the main thread after an explicit selection.
+func SetDefaultApp(path string, app App) error { return setDefaultApp(path, app) }
+
 // Properties shows the system's properties of files or directories.
 func Properties(owner Window, paths []string) error { return properties(owner, paths) }
 

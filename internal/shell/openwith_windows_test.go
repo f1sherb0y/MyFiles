@@ -1,9 +1,33 @@
 package shell
 
 import (
+	"os"
 	"slices"
 	"testing"
 )
+
+func TestAppProgIDs(t *testing.T) {
+	if os.Getenv("MYFILES_ASSOC_READ_TEST") == "" {
+		t.Skip("read-only live handler check is opt-in")
+	}
+	for _, ext := range []string{".txt", ".jpg", ".pdf"} {
+		path := `C:\nowhere\sample` + ext
+		resolved := 0
+		for _, app := range Apps(path) {
+			id, err := appProgID(path, app)
+			if err != nil {
+				// The shell also lists stale registrations without a ProgID.
+				t.Logf("%s %s: %v", ext, app.Name, err)
+				continue
+			}
+			resolved++
+			t.Logf("%s %s: %s -> %s", ext, app.Name, app.ID, id)
+		}
+		if resolved == 0 {
+			t.Errorf("no usable handler for %s", ext)
+		}
+	}
+}
 
 // TestApps lists the programs for a type every system has some for.
 // Listing shows nothing and starts nothing.

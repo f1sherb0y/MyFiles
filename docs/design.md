@@ -228,9 +228,11 @@ MyGo 的补丁里有两处是为这条路径加的：`Context.Rebuild`（一帧�
 
 1. 用户在 MyFiles 里为这个扩展名选过程序（设置里的 `openWith`，扩展名 → 程序的 ID），就用它打开；程序已经不在了（`shell.OpenIn` 返回 `ErrChoose`）就忘掉这个选择，往下走。
 2. 否则问系统的默认程序。`shell.Open` 先自己判断这个默认能不能用（`needsChoice`）：`AssocQueryString` 查到的可执行文件是 `OpenWith.exe`，说明系统会弹选择框；查不到可执行文件、默认的 ProgId 是 `AppX…`、而它的 `PackageId` 在当前用户的包列表（`HKCU\Software\Classes\Local Settings\…\AppModel\Repository\Packages`）里没有，说明默认指向一个已卸载的商店应用。这两种情况都返回 `ErrChoose`。不这样先判断的话，静默方式的 `ShellExecuteEx` 会返回成功而什么都不做。查不到可执行文件的其他情况（比如 `.lnk`）照常交给 `ShellExecuteEx`。
-3. `ErrChoose` 时弹选择框：先列 `SHAssocEnumHandlers` 推荐的程序，「更多应用」再列全部（没有推荐的类型直接列全部，没有扩展名的文件按 `.` 查）。勾着「始终使用此应用」就把选择记进 `openWith`。从双击进来默认勾上，从菜单进来默认不勾。
+3. `ErrChoose` 时弹选择框：先列 `SHAssocEnumHandlers` 推荐的程序，「更多应用」再列全部（没有推荐的类型直接列全部，没有扩展名的文件按 `.` 查）。勾着「设为系统默认打开方式」就把选择记进 `openWith`，并在后台调用 `shell.SetDefaultApp` 更新 Windows 关联。从双击进来默认勾上，从菜单进来默认不勾。
 
-这个选择只在 MyFiles 里生效，不改系统的默认应用。实测有一个附带效果：某个类型在系统里没有用户选择时，用 `IAssocHandler::Invoke` 打开过一次之后，`AssocQueryString` 对这个类型就直接解析到那个程序了（2026-11-12 `.psd` → MyImages，注册表里没有出现 `UserChoice`）。
+系统默认关联通过所选 `IAssocHandler` 的 `IObjectWithProgID::GetProgID` 获取正确的 ProgID，保留原程序的启动命令和商店应用激活方式。Windows 10 使用传统 `UserChoice` 校验；新版 Windows 11 使用 `UserChoiceLatest`，先用现有记录验证兼容性。写入后通知 Shell 并查询实际关联，失败则用内存快照恢复原选择、显示错误，当前文件仍用所选程序打开。一次性打开不修改默认关联。
+
+校验代码与 MyImages 使用同一实现，`internal/assochash` 中的新式算法来自 [cssxn/UserChoiceLatestHash](https://github.com/cssxn/UserChoiceLatestHash)，参考提交 `662070e5cdea4496bc474f4bdfd81f77d4cabab3`。MIT 许可保留在目录内并嵌入 exe（`--licenses`）。`MYFILES_ASSOC_READ_TEST=1` 启用只读校验与真实程序 ProgID 查询，`MYFILES_ASSOC_WRITE_TEST=1` 启用唯一临时扩展名的写入、生效查询和回退测试。传统注册表路径在 Windows 11 上测试，Windows 10 真机验证仍待完成。
 
 这个流程用真实鼠标在真实窗口里验证过（`out/pickcheck.ps1`，2026-11-12）：双击 `.jpg`（默认指向已卸载的"照片"）和 `.psd` 都弹出选择框，点 MyImages 后 0.4 秒内打开；再双击另一个 `.jpg` 不再询问，直接打开。
 

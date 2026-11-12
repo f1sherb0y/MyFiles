@@ -73,7 +73,9 @@ type fakeDesk struct {
 	// menus counts the system's menus read.
 	menus int
 	// gone is the ID of a program that is no longer installed.
-	gone string
+	gone       string
+	defaultErr error
+	defaults   []string
 }
 
 func (d *fakeDesk) post(fn func()) { d.frame.Update(fn) }
@@ -166,6 +168,19 @@ func (d *fakeDesk) openIn(_ shell.Window, path string, app shell.App) error {
 	}
 	d.note("open " + path + " in " + app.ID)
 	return nil
+}
+
+func (d *fakeDesk) setDefaultApp(path string, app shell.App) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.defaults = append(d.defaults, path+" in "+app.ID)
+	return d.defaultErr
+}
+
+func (d *fakeDesk) defaultCalls() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.defaults)
 }
 func (d *fakeDesk) properties(_ shell.Window, paths []string) error {
 	d.note("properties " + strings.Join(paths, ", "))

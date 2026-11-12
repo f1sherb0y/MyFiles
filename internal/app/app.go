@@ -22,7 +22,7 @@ import (
 )
 
 // Version is the program's version, set when it is built.
-var Version = "0.2.1"
+var Version = "0.2.3"
 
 // App is the running program: what its windows share.
 type App struct {

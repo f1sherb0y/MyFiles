@@ -9,9 +9,7 @@ import (
 )
 
 // chooser is the question which program opens a file, asked in the
-// window: the system has a dialog for it, which a program cannot count
-// on showing (see shell.Open), and which sets what opens the type for
-// the whole system, as no program may.
+// window. An "always" selection also updates the system's file association.
 type chooser struct {
 	open bool
 	path string
@@ -196,7 +194,7 @@ func (w *Window) chooserDialog(c *ui.Context) {
 			a.set.OpenWith[p.ext] = app.ID
 			a.saveSoon()
 		}
-		w.openIn(p.path, app)
+		w.openWithApp(p.path, app, p.always && p.ext != "")
 	}
 	if !p.open {
 		w.pick = nil

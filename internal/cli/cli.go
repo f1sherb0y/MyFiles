@@ -51,6 +51,7 @@ type Command struct {
 	Delegate []string
 
 	Help, Version bool
+	Licenses      bool
 	// SetDefault is "on" or "off" to make MyFiles the default file manager,
 	// or stop being it, and exit.
 	SetDefault string
@@ -90,6 +91,7 @@ Options:
       --bench-out <file>  write the timings there as JSON
       --bench-rounds <n>  enter each folder n times (default 5)
   -v, --version           print the version
+      --licenses          print association-code license notices
   -h, --help              print this help
 
 The arguments of Windows' explorer.exe work too:
@@ -131,6 +133,8 @@ func Parse(args []string, cwd string) (*Command, error) {
 			cmd.Help = true
 		case "-v", "--version":
 			cmd.Version = true
+		case "--licenses":
+			cmd.Licenses = true
 		case "-n", "--new-window":
 			cmd.NewWindow = true
 		case "--set-default":

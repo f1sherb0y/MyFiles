@@ -489,6 +489,9 @@ func TestContextMenus(t *testing.T) {
 	if h.w.pick != nil || len(h.a.set.OpenWith) != 0 {
 		t.Errorf("after choosing once: asking %v, kept %v", h.w.pick != nil, h.a.set.OpenWith)
 	}
+	if calls := h.desk.defaultCalls(); len(calls) != 0 {
+		t.Errorf("a one-time choice changed system defaults: %v", calls)
+	}
 
 	// What the system and other programs have for the file is under
 	// More, drawn here: without what the menu has itself, with its
@@ -571,6 +574,9 @@ func TestChooseProgram(t *testing.T) {
 	if got := h.a.set.OpenWith[".pic"]; got != "painter.exe" {
 		t.Errorf("the program kept for the type is %q", got)
 	}
+	if calls := h.desk.defaultCalls(); !reflect.DeepEqual(calls, []string{h.path("one.pic") + " in painter.exe"}) {
+		t.Errorf("system default requests: %v", calls)
+	}
 
 	// The next file of the type opens without a question.
 	h.doubleClick("two.pic")
@@ -591,6 +597,23 @@ func TestChooseProgram(t *testing.T) {
 	h.click("Viewer")
 	h.wait("the file to open", opened("open "+h.path("two.pic")+" in viewer.exe"))
 	h.desk.launches()
+}
+
+func TestDefaultFailureStillOpensFile(t *testing.T) {
+	h := newHarness(t, "one.pic")
+	h.desk.defaultErr = fmt.Errorf("test association denied")
+	h.doubleClick("one.pic")
+	h.wait("the question", func() bool { _, ok := h.tt.Find("Painter"); return ok })
+	h.click("Painter")
+	h.wait("the selected app to open", func() bool {
+		return slices.Contains(h.desk.launches(), "open "+h.path("one.pic")+" in painter.exe")
+	})
+	h.wait("the Windows default error", func() bool {
+		return strings.Contains(h.w.status, "Could not set the Windows default for .pic: test association denied")
+	})
+	if h.a.set.OpenWith[".pic"] != "painter.exe" {
+		t.Fatal("lost the local choice after a system association failure")
+	}
 }
 
 func TestEmptyRoom(t *testing.T) {

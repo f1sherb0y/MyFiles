@@ -92,6 +92,7 @@ type desktop interface {
 	// it with one of those apps lists.
 	open(owner shell.Window, path, dir string) error
 	openIn(owner shell.Window, path string, app shell.App) error
+	setDefaultApp(path string, app shell.App) error
 	properties(owner shell.Window, paths []string) error
 	// systemMenu shows the system's context menu where the pointer is.
 	systemMenu(owner shell.Window, paths []string, background string) (shell.MenuAction, error)
@@ -192,6 +193,10 @@ func (system) menuIcon(png []byte) (ui.MenuIcon, error) {
 
 func (system) openIn(owner shell.Window, path string, app shell.App) error {
 	return shell.OpenIn(owner, path, app)
+}
+
+func (system) setDefaultApp(path string, app shell.App) error {
+	return shell.SetDefaultApp(path, app)
 }
 
 func (system) properties(owner shell.Window, paths []string) error {

@@ -53,8 +53,8 @@ type Settings struct {
 	ColumnOrder []string           `json:"columnOrder,omitempty"`
 	// OpenWith are the programs the user chose here to open the files of
 	// a type with, by its extension (with its dot, in lower case): each
-	// a shell.App's ID. They come before what the system has for the
-	// type, which a program cannot set.
+	// a shell.App's ID. An explicit "always" selection also updates the
+	// system default; this keeps the choice usable if that update fails.
 	OpenWith map[string]string `json:"openWith,omitempty"`
 }
 

@@ -356,14 +356,24 @@ func (w *Window) folderProperties(t *Tab) {
 
 // openIn opens a file with one of the programs for its type.
 func (w *Window) openIn(path string, app shell.App) {
+	w.openWithApp(path, app, false)
+}
+
+func (w *Window) openWithApp(path string, app shell.App, always bool) {
 	owner := w.handle()
 	go func() {
+		var defaultErr error
+		if always {
+			if err := w.app.desk.setDefaultApp(path, app); err != nil {
+				defaultErr = errors.New(locales.ChooserDefaultFailed(fsys.ExtOf(fsys.Base(path)), err.Error()))
+			}
+		}
 		err := w.app.desk.openIn(owner, path, app)
 		if err == shell.ErrChoose {
 			// Gone since it was listed.
 			err = errors.New(locales.ChooserGone(app.Name))
 		}
-		w.report(err)
+		w.report(errors.Join(defaultErr, err))
 	}()
 }
 
