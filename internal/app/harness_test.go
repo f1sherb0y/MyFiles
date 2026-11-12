@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -11,9 +12,9 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/config"
-	"cairn/internal/shell"
-	"cairn/internal/workspace"
+	"myfiles/internal/config"
+	"myfiles/internal/shell"
+	"myfiles/internal/workspace"
 )
 
 // fakeFrame stands in for a native window: what goroutines ask it to run
@@ -59,6 +60,8 @@ type fakeDesk struct {
 
 	mu       sync.Mutex
 	launched []string
+	// menus counts the system's menus read.
+	menus int
 }
 
 func (d *fakeDesk) post(fn func()) { d.frame.Update(fn) }
@@ -88,6 +91,51 @@ func (d *fakeDesk) open(_ shell.Window, path, _ string) error {
 }
 func (d *fakeDesk) openWith(_ shell.Window, path string) error {
 	d.note("open with " + path)
+	return nil
+}
+func (d *fakeDesk) apps(path string) []shell.App {
+	if strings.HasSuffix(path, ".txt") {
+		return []shell.App{{Name: "Notes", ID: "notes.exe"}, {Name: "Editor", ID: "editor.exe"}}
+	}
+	return nil
+}
+func (d *fakeDesk) menuIcon([]byte) (ui.MenuIcon, error) { return nil, nil }
+
+// loadMenu is a system's menu of a few items, as other programs add
+// them, which notes what is run.
+func (d *fakeDesk) loadMenu(_ shell.Window, paths []string, background string) (systemItems, error) {
+	d.mu.Lock()
+	d.menus++
+	d.mu.Unlock()
+	return &fakeMenu{d: d, of: strings.Join(paths, ", ") + background}, nil
+}
+
+type fakeMenu struct {
+	d  *fakeDesk
+	of string
+}
+
+func (m *fakeMenu) Items() []shell.MenuItem {
+	return []shell.MenuItem{
+		{Text: "Open", ID: 1, Verb: "open"},
+		{Separator: true},
+		{Text: "Compress", Sub: 1},
+		{Text: "Scan for Viruses", ID: 2},
+		{Separator: true},
+		{Text: "Delete", ID: 3, Verb: "delete"},
+		{Text: "Rename", ID: 4, Verb: "rename"},
+	}
+}
+func (m *fakeMenu) Submenu(sub int) []shell.MenuItem {
+	return []shell.MenuItem{{Text: "Add to Archive", ID: 10}, {Text: "Extract Here", ID: 11, Disabled: true}}
+}
+func (m *fakeMenu) Invoke(id int) (shell.MenuAction, error) {
+	m.d.note("command " + strconv.Itoa(id) + " of " + m.of)
+	return shell.MenuDone, nil
+}
+func (m *fakeMenu) Close() {}
+func (d *fakeDesk) openIn(_ shell.Window, path string, app shell.App) error {
+	d.note("open " + path + " in " + app.ID)
 	return nil
 }
 func (d *fakeDesk) properties(_ shell.Window, paths []string) error {
@@ -130,6 +178,8 @@ type harness struct {
 	desk *fakeDesk
 	// root is the folder the test's files are in.
 	root string
+	// presented, when set, runs after each frame is drawn.
+	presented func()
 }
 
 // newHarness makes a folder holding the entries named (those ending in a
@@ -161,12 +211,17 @@ func newHarness(t *testing.T, entries ...string) *harness {
 	desk := &fakeDesk{frame: f}
 	a := &App{set: config.Defaults(), nextTab: 1, desk: desk, ephemeral: true}
 	a.set.Sidebar = false
-	a.icons = newIcons(1, desk.post, func() {})
+	a.icons = newIcons(1, desk.post, func() {}, nil)
 	w := a.window(nil)
 	w.attach(f)
 	h := &harness{t: t, a: a, w: w, f: f, desk: desk, root: root}
 	w.newTab(w.layout.Focus, root, "")
-	h.tt = ui.NewTester(w.view, 900, 600)
+	h.tt = ui.NewTester(func(c *ui.Context) {
+		if h.presented != nil {
+			c.OnPresented(h.presented)
+		}
+		w.view(c)
+	}, 900, 600)
 	h.settle()
 	t.Cleanup(func() {
 		if l := desk.launches(); len(l) > 0 {

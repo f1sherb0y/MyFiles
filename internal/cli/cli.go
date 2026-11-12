@@ -1,10 +1,10 @@
-// Package cli reads the command line: Cairn's own options, and the
+// Package cli reads the command line: MyFiles's own options, and the
 // arguments Windows' explorer.exe takes, which other programs pass to
 // whatever opens folders for them.
 //
-//	cairn [options] [path...]
-//	cairn /select,C:\Users\ada\notes.txt
-//	cairn /e,/root,C:\Projects
+//	myfiles [options] [path...]
+//	myfiles /select,C:\Users\ada\notes.txt
+//	myfiles /e,/root,C:\Projects
 package cli
 
 import (
@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 // Target is something to show: a folder in a tab, with or without one of
@@ -44,13 +44,13 @@ type Command struct {
 	// Split puts the second target and those after it in a pane beside
 	// the first.
 	Split Split
-	// Delegate are arguments Cairn cannot show itself, as the Recycle
+	// Delegate are arguments MyFiles cannot show itself, as the Recycle
 	// Bin or the Control Panel, to hand to the system's file manager
 	// one by one.
 	Delegate []string
 
 	Help, Version bool
-	// SetDefault is "on" or "off" to make Cairn the default file manager,
+	// SetDefault is "on" or "off" to make MyFiles the default file manager,
 	// or stop being it, and exit.
 	SetDefault string
 	// Bench is a file of folders to time navigating through.
@@ -71,10 +71,10 @@ type Command struct {
 }
 
 // Usage is the text --help prints.
-const Usage = `Cairn, a fast file manager.
+const Usage = `MyFiles, a fast file manager.
 
 Usage:
-  cairn [options] [path...]
+  myfiles [options] [path...]
 
 Each path opens in a tab: a folder, or a file, which is chosen in its
 folder. Without a path, the tabs of the last session come back.
@@ -83,7 +83,7 @@ Options:
   -n, --new-window        open a new window rather than tabs in the running one
       --select <path>     open the folder of path and choose it there
       --split <right|down> put the paths after the first in a pane beside it
-      --set-default       make Cairn the default file manager, and exit
+      --set-default       make MyFiles the default file manager, and exit
       --unset-default     give folders back to Explorer, and exit
       --bench <file>      time entering the folders listed in file, and exit
       --bench-out <file>  write the timings there as JSON
@@ -242,7 +242,7 @@ func (cmd *Command) explorer(arg, cwd string) (selecting bool) {
 		case "/n", "/separate":
 			cmd.NewWindow = true
 		case "/e", "/s":
-			// With the folder tree, which Cairn has no mode for.
+			// With the folder tree, which MyFiles has no mode for.
 		case "/select":
 			if v := rest(); v != "" {
 				cmd.addSelect(v, cwd)

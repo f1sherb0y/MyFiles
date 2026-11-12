@@ -11,7 +11,7 @@ import (
 // folder, and writes the same as Markdown.
 //
 // startups are reports that hold only a startup time, measured from
-// outside (-cairn-startup): each replaces the startup time of the report
+// outside (-myfiles-startup): each replaces the startup time of the report
 // of the same app, which is that app's own count.
 func runCompare(fileA, fileB string, startups []string, md string) error {
 	a, err := readReport(fileA)

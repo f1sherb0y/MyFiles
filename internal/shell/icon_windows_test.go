@@ -10,7 +10,7 @@ import (
 	"time"
 	"unsafe"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 // alphaOf counts the pixels of a picture that are transparent, in
@@ -37,7 +37,7 @@ func alphaOf(img *image.RGBA) (clear, partial, opaque, invalid int) {
 // savePNG writes a picture where a person can look at it.
 func savePNG(t *testing.T, name string, img *image.RGBA) {
 	t.Helper()
-	dir := filepath.Join(os.TempDir(), "cairn-icons")
+	dir := filepath.Join(os.TempDir(), "myfiles-icons")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}

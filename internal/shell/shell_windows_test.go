@@ -13,7 +13,7 @@ import (
 func TestMain(m *testing.M) {
 	testFlags = fofSilent | fofNoErrorUI
 	// Whatever a test forgets, it cannot reach the user's registration.
-	classesRoot, backupRoot = `Software\CairnTest\unset\Classes`, `Software\CairnTest\unset\Backup`
+	classesRoot, backupRoot = `Software\MyFilesTest\unset\Classes`, `Software\MyFilesTest\unset\Backup`
 	os.Exit(m.Run())
 }
 

@@ -3,9 +3,9 @@ package app
 import (
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/cli"
-	"cairn/internal/fsys"
-	"cairn/internal/workspace"
+	"myfiles/internal/cli"
+	"myfiles/internal/fsys"
+	"myfiles/internal/workspace"
 )
 
 // shortcuts handles the keys of the window, wherever the focus is. Those
@@ -50,9 +50,21 @@ func (w *Window) shortcuts(c *ui.Context) {
 	if t == nil {
 		return
 	}
-	switch {
-	case c.Shortcut(ui.Cmd, ui.KeyW), c.Shortcut(ui.Ctrl, ui.KeyF4):
+	// Ctrl+1 to Ctrl+9 show the pane's tabs by their place.
+	for i, key := range [...]ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6, ui.Key7, ui.Key8, ui.Key9} {
+		if i < len(p.Tabs) && c.Shortcut(ui.Cmd, key) {
+			w.show(p.Tabs[i])
+		}
+	}
+	if c.Shortcut(ui.Cmd, ui.KeyW) || c.Shortcut(ui.Ctrl, ui.KeyF4) {
 		w.closeTab(t.ID)
+		return
+	}
+	if t.settings {
+		// The rest are a folder's.
+		return
+	}
+	switch {
 	case c.Shortcut(ui.Cmd, ui.KeyL), c.Shortcut(ui.Alt, ui.KeyD), c.Shortcut(0, ui.KeyF4):
 		w.editAddress(t)
 	case c.Shortcut(ui.Alt, ui.KeyLeft), c.Shortcut(0, ui.KeyBack):
@@ -76,12 +88,6 @@ func (w *Window) shortcuts(c *ui.Context) {
 	for mode, key := range [viewModes]ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6} {
 		if c.Shortcut(ui.Cmd|ui.Shift, key) {
 			w.setView(t, viewMode(mode))
-		}
-	}
-	// Ctrl+1 to Ctrl+9 show the pane's tabs by their place.
-	for i, key := range [...]ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6, ui.Key7, ui.Key8, ui.Key9} {
-		if i < len(p.Tabs) && c.Shortcut(ui.Cmd, key) {
-			w.show(p.Tabs[i])
 		}
 	}
 }

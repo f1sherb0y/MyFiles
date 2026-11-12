@@ -12,8 +12,8 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/fsys"
-	"cairn/internal/shell"
+	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
 )
 
 func TestNavigate(t *testing.T) {
@@ -458,6 +458,59 @@ func TestContextMenus(t *testing.T) {
 		t.Errorf("Copy Path copied %q", h.desk.text)
 	}
 
+	// A file opens with one of the programs for its type, listed in a
+	// submenu, or with one chosen in the system's dialog.
+	if err := h.tt.RightClick("one.txt"); err != nil {
+		t.Fatal(err)
+	}
+	h.settle()
+	if err := h.tt.ChooseMenuItem("Open With", "Editor"); err != nil {
+		t.Fatalf("%v: %q", err, h.tt.Menu())
+	}
+	h.wait("the file to open", func() bool {
+		l := h.desk.launches()
+		return slices.Contains(l, "open "+h.path("one.txt")+" in editor.exe")
+	})
+	if err := h.tt.RightClick("one.txt"); err != nil {
+		t.Fatal(err)
+	}
+	h.settle()
+	if err := h.tt.ChooseMenuItem("Open With", "Choose Another App…"); err != nil {
+		t.Fatalf("%v: %q", err, h.tt.Menu())
+	}
+	h.wait("the dialog", func() bool {
+		return slices.Contains(h.desk.launches(), "open with "+h.path("one.txt"))
+	})
+
+	// What the system and other programs have for the file is under
+	// More, drawn here: without what the menu has itself, with its
+	// submenus, and run when chosen. The system's menu is read as the
+	// menu opens, not before.
+	h.desk.mu.Lock()
+	h.desk.menus = 0
+	h.desk.mu.Unlock()
+	h.settle()
+	if h.desk.menus != 0 {
+		t.Fatalf("the system's menu was read %d times with no menu open", h.desk.menus)
+	}
+	if err := h.tt.RightClick("one.txt"); err != nil {
+		t.Fatal(err)
+	}
+	h.settle()
+	if err := h.tt.ChooseMenuItem("More", "Compress", "Add to Archive"); err != nil {
+		t.Fatalf("%v: %q", err, h.tt.Menu())
+	}
+	h.wait("the command", func() bool {
+		return slices.Contains(h.desk.launches(), "command 10 of "+h.path("one.txt"))
+	})
+	// The one read moments ago for the same file may still serve.
+	if h.desk.menus > 1 {
+		t.Errorf("the system's menu was read %d times for one menu", h.desk.menus)
+	}
+	if got := tidy(h.a.sysIcons((&fakeMenu{}).Items())()); len(got) != 2 || got[0].Text != "Compress" || got[1].Text != "Scan for Viruses" {
+		t.Errorf("the system's items under More are %+v", got)
+	}
+
 	// A directory opens in a tab of its own, or in a pane beside.
 	if err := h.tt.RightClick("alpha"); err != nil {
 		t.Fatal(err)
@@ -468,6 +521,52 @@ func TestContextMenus(t *testing.T) {
 	h.settle()
 	if got := h.panes(); !reflect.DeepEqual(got, [][]string{{filepath.Base(h.root)}, {"alpha"}}) {
 		t.Fatalf("after Open in Split Pane: %v", got)
+	}
+}
+
+// TestSettingsTab checks that the settings show in a tab of their own,
+// one for the window, which the keys of folders leave alone.
+func TestSettingsTab(t *testing.T) {
+	h := newHarness(t, "alpha/", "one.txt")
+	h.key(ui.Cmd, ui.KeyComma)
+	tab := h.w.current()
+	if tab == nil || !tab.settings || len(h.w.tabs) != 2 {
+		t.Fatalf("Ctrl+, shows %+v among %d tabs", tab, len(h.w.tabs))
+	}
+	for _, want := range []string{"Settings", "Default file manager", "Show hidden files", "Theme"} {
+		if _, ok := h.tt.Find(want); !ok {
+			t.Errorf("the settings tab shows no %q; texts %q", want, h.tt.Texts())
+		}
+	}
+	if got := h.panes(); !reflect.DeepEqual(got, [][]string{{filepath.Base(h.root), "Settings"}}) {
+		t.Errorf("the tabs are %v", got)
+	}
+	// A folder's keys do nothing to it, and what they would open opens
+	// nowhere.
+	h.key(ui.Alt, ui.KeyUp)
+	h.key(0, ui.KeyF5)
+	h.key(ui.Cmd|ui.Shift, ui.KeyN)
+	h.key(ui.Cmd, ui.KeyBackslash)
+	if cur := h.w.current(); cur != tab || len(h.w.tabs) != 2 || h.exists("New folder") {
+		t.Errorf("a folder's keys changed the settings tab: %v", h.panes())
+	}
+	// Asked for again, from the folder's tab, the same tab shows.
+	h.key(ui.Cmd, ui.Key1)
+	if h.w.current() == tab {
+		t.Fatal("Ctrl+1 did not show the folder's tab")
+	}
+	h.key(ui.Cmd, ui.KeyComma)
+	if h.w.current() != tab || len(h.w.tabs) != 2 {
+		t.Errorf("Ctrl+, again shows %v", h.panes())
+	}
+	// A setting changed there holds.
+	h.click("Show hidden files")
+	if !h.a.set.ShowHidden {
+		t.Error("the check box of the settings tab did not change the setting")
+	}
+	h.key(ui.Cmd, ui.KeyW)
+	if len(h.w.tabs) != 1 || h.w.current().settings {
+		t.Errorf("Ctrl+W left %v", h.panes())
 	}
 }
 

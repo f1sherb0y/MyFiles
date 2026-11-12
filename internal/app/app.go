@@ -1,4 +1,4 @@
-// Package app is Cairn's interface: windows of panes of tabs, each tab a
+// Package app is MyFiles's interface: windows of panes of tabs, each tab a
 // folder. It draws with MyGo's native UI and is the same on every
 // platform; what differs between systems is behind the fsys and shell
 // packages.
@@ -8,15 +8,16 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/cli"
-	"cairn/internal/config"
-	"cairn/internal/fsys"
-	"cairn/internal/shell"
-	"cairn/internal/workspace"
+	"myfiles/internal/cli"
+	"myfiles/internal/config"
+	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
+	"myfiles/internal/workspace"
 )
 
 // Version is the program's version, set when it is built.
@@ -58,6 +59,9 @@ type App struct {
 	// changed.
 	saveMu sync.Mutex
 	saving bool
+
+	// apps are the programs that open files, by the files' extension.
+	apps map[string]*typeApps
 }
 
 // Run shows what a command line asks for and runs until the last window
@@ -77,7 +81,7 @@ func Run(cmd *cli.Command) error {
 	}
 	// The GPU's driver loads while the window is made.
 	ui.Prewarm()
-	mygo.App.SetName("Cairn")
+	mygo.App.SetName("MyFiles")
 	if runtime.GOOS == "windows" {
 		// No menu bar: the window has none to show, and its menus are
 		// drawn in it.
@@ -102,12 +106,19 @@ func Run(cmd *cli.Command) error {
 		if scale <= 0 {
 			scale = 1
 		}
-		a.icons = newIcons(scale, a.desk.post, a.invalidate)
+		// What is known of types is kept between runs. It is no setting:
+		// runs that leave the settings alone use it too.
+		a.icons = newIcons(scale, a.desk.post, a.invalidate, openIconStore())
 		if cmd.Bench != "" || cmd.Screenshot != "" {
 			a.bench = newBench(cmd)
 		}
 		a.open(cmd, true)
 		mark("opened")
+		if !solo {
+			// Once the window shows and its folder is read: not in their
+			// way.
+			time.AfterFunc(time.Second, a.warmSystemMenu)
+		}
 	})
 	return mygo.App.Run()
 }

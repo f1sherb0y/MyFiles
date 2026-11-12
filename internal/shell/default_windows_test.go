@@ -13,9 +13,9 @@ import (
 // the test is over. It returns the root of the classes.
 func sandbox(t *testing.T) string {
 	t.Helper()
-	root := fmt.Sprintf(`Software\CairnTest\%08x`, rand.Uint32())
+	root := fmt.Sprintf(`Software\MyFilesTest\%08x`, rand.Uint32())
 	oldClasses, oldBackup := classesRoot, backupRoot
-	classesRoot, backupRoot = root+`\Classes`, root+`\Cairn\DefaultBackup`
+	classesRoot, backupRoot = root+`\Classes`, root+`\MyFiles\DefaultBackup`
 	if classesRoot == userClasses {
 		t.Fatal("the sandbox is the user's own classes")
 	}
@@ -27,7 +27,7 @@ func sandbox(t *testing.T) string {
 		if err := deleteTree(root); err != nil {
 			t.Errorf("cleaning up: %v", err)
 		}
-		prune(`Software\CairnTest`, `Software`)
+		prune(`Software\MyFilesTest`, `Software`)
 	})
 	return classesRoot
 }
@@ -71,8 +71,8 @@ func sameTree(t *testing.T, what string, got, want []string) {
 }
 
 const (
-	testExe  = `C:\Program Files\Cairn\cairn.exe`
-	otherExe = `D:\Elsewhere\cairn.exe`
+	testExe  = `C:\Program Files\MyFiles\myfiles.exe`
+	otherExe = `D:\Elsewhere\myfiles.exe`
 )
 
 func set(t *testing.T, exe string, d Default) {
@@ -94,12 +94,12 @@ func TestDefaultFileManagerFromNothing(t *testing.T) {
 		t.Errorf("after turning both on: %+v", got)
 	}
 	for path, want := range map[string]string{
-		classes + `\Directory\shell`:               "cairn",
-		classes + `\Directory\shell\cairn`:         "Open in Cairn",
-		classes + `\Directory\shell\cairn\command`: `"C:\Program Files\Cairn\cairn.exe" "%1"`,
-		classes + `\Drive\shell`:                   "cairn",
-		classes + `\Drive\shell\cairn\command`:     `"C:\Program Files\Cairn\cairn.exe" "%1"`,
-		classes + `\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}\shell\opennewwindow\command`: `"C:\Program Files\Cairn\cairn.exe"`,
+		classes + `\Directory\shell`:                 "myfiles",
+		classes + `\Directory\shell\myfiles`:         "Open in MyFiles",
+		classes + `\Directory\shell\myfiles\command`: `"C:\Program Files\MyFiles\myfiles.exe" "%1"`,
+		classes + `\Drive\shell`:                     "myfiles",
+		classes + `\Drive\shell\myfiles\command`:     `"C:\Program Files\MyFiles\myfiles.exe" "%1"`,
+		classes + `\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}\shell\opennewwindow\command`: `"C:\Program Files\MyFiles\myfiles.exe"`,
 	} {
 		if got, _ := stringValue(path, ""); got != want {
 			t.Errorf("%s = %q, want %q", path, got, want)
@@ -111,7 +111,7 @@ func TestDefaultFileManagerFromNothing(t *testing.T) {
 	}
 	// The path of the program is compared without case, and another
 	// program's registration is not ours.
-	if got := DefaultFileManager(`c:\program files\cairn\CAIRN.EXE`); got != (Default{Folders: true, Shortcut: true}) {
+	if got := DefaultFileManager(`c:\program files\myfiles\MYFILES.EXE`); got != (Default{Folders: true, Shortcut: true}) {
 		t.Errorf("in another case: %+v", got)
 	}
 	if got := DefaultFileManager(otherExe); got != (Default{}) {
@@ -217,7 +217,7 @@ func TestDefaultFileManagerKeepsOthers(t *testing.T) {
 		if got, _ := stringValue(path, ""); got != "other" {
 			t.Errorf("%s = %q, want the other program's verb", path, got)
 		}
-		if keyExists(path + `\cairn`) {
+		if keyExists(path + `\myfiles`) {
 			t.Errorf("%s still has our verb", path)
 		}
 	}

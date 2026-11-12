@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 var (
@@ -387,7 +387,7 @@ type windowClass struct {
 // menuClass registers the class of the menus' windows, once, and returns
 // its name and the module it belongs to.
 var menuClass = sync.OnceValues(func() (*uint16, uintptr) {
-	name, _ := windows.UTF16PtrFromString("CairnShellMenu")
+	name, _ := windows.UTF16PtrFromString("MyFilesShellMenu")
 	instance, _, _ := procGetModuleHandleW.Call(0)
 	class := windowClass{
 		// The one callback of the package: the system has room for few.

@@ -5,7 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 // sidebarRow is the height of a row of the sidebar.
@@ -29,7 +29,7 @@ func (w *Window) sidebar(c *ui.Context) {
 		// Along the top of the window, the sidebar is its title bar too.
 		bar := c.TitleBar()
 		ui.Row(c.Key("title")).Height(stripHeight).Shrink(0).DragWindow().Padding(0, 10, 0, max(bar.Left, 10)).Children(func() {
-			ui.Text(c, "Cairn").FontWeight(600).TextColor(th.TextMuted).SingleLine()
+			ui.Text(c, "MyFiles").FontWeight(600).TextColor(th.TextMuted).SingleLine()
 		})
 		ui.Scroll(c.Key("places")).Grow(1).MinHeight(0).Padding(2, 4, 8, 4).Children(func() {
 			w.place(c, fsys.Computer, "This PC", "", at)

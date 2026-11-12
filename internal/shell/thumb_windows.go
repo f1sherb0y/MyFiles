@@ -42,22 +42,6 @@ func thumbnail(path string, px int) (*image.RGBA, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The bitmap is blue, green, red and alpha, the colors multiplied by
-	// the alpha already; pictures without transparency may leave the
-	// alpha at zero throughout.
-	pix := img.Pix
-	noAlpha := true
-	for i := 3; i < len(pix); i += 4 {
-		if pix[i] != 0 {
-			noAlpha = false
-			break
-		}
-	}
-	for i := 0; i < len(pix); i += 4 {
-		pix[i], pix[i+2] = pix[i+2], pix[i]
-		if noAlpha {
-			pix[i+3] = 255
-		}
-	}
+	orderPixels(img)
 	return img, nil
 }

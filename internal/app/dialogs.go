@@ -5,7 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/shell"
+	"myfiles/internal/shell"
 )
 
 // saveSoon writes the settings, and the main window's session, a moment
@@ -31,11 +31,38 @@ func (a *App) saveSoon() {
 	})
 }
 
-// openSettings shows the settings, with what the system has the program
-// registered for, read off the main thread.
+// settingsPath stands for the settings where a session keeps the folders
+// of its tabs: no folder has it for a path.
+const settingsPath = "::settings"
+
+// openSettings shows the settings: in a tab, the one the window has for
+// them or a new one in the pane with the focus, with what the system has
+// the program registered for, read off the main thread.
 func (w *Window) openSettings() {
-	w.settings = true
+	if w.building {
+		w.defer_(w.openSettings)
+		return
+	}
 	a := w.app
+	shown := false
+	for id, t := range w.tabs {
+		if t.settings {
+			w.show(id)
+			shown = true
+			break
+		}
+	}
+	if p := w.layout.Focused(); !shown && p != nil {
+		t := &Tab{ID: a.nextTab, cursor: -1, settings: true}
+		a.nextTab++
+		w.tabs[t.ID] = t
+		at := -1
+		if len(p.Tabs) > 0 {
+			at = p.Active + 1
+		}
+		w.layout.AddTab(p.ID, t.ID, at)
+		w.changed()
+	}
 	go func() {
 		d := shell.DefaultFileManager(a.exe)
 		w.update(func() { a.registered = d })
@@ -59,8 +86,8 @@ func (w *Window) register(d shell.Default) {
 	}()
 }
 
-// dialogs builds what shows over the window: the settings, and the
-// question asked before something that cannot be undone.
+// dialogs builds what shows over the window: the question asked before
+// something that cannot be undone.
 func (w *Window) dialogs(c *ui.Context) {
 	if q := w.ask; q != nil {
 		switch ui.AlertDialog(c, &q.open, q.title, q.message, "Cancel", q.confirm) {
@@ -74,24 +101,26 @@ func (w *Window) dialogs(c *ui.Context) {
 			}
 		}
 	}
-	if !w.settings {
-		return
-	}
+}
+
+// settingsPage builds the settings, as the tab that shows them does in
+// place of a folder.
+func (w *Window) settingsPage(c *ui.Context) {
 	a := w.app
 	th := c.Theme()
 	set := &a.set
 	changed := false
-	ui.Modal(c, &w.settings, func() {
-		ui.Column(c).Width(460).Gap(10).Children(func() {
-			ui.Text(c, "Settings").FontSize(th.FontSize + 3).FontWeight(600)
+	ui.Scroll(c.Key("settings")).Grow(1).MinHeight(0).Children(func() {
+		ui.Column(c).MaxWidth(560).Gap(10).Padding(20, 24).Children(func() {
+			ui.Text(c, "Settings").FontSize(th.FontSize + 5).FontWeight(600)
 
 			section(c, "Default file manager")
 			reg := a.registered
-			if ui.Checkbox(c, &reg.Folders, "Open folders with Cairn").Changed() {
+			if ui.Checkbox(c, &reg.Folders, "Open folders with MyFiles").Changed() {
 				w.register(reg)
 			}
 			hint(c, "Folders opened from the desktop and from other programs open here instead of in File Explorer. Programs that ask File Explorer itself to show a file still get File Explorer.")
-			if ui.Checkbox(c, &reg.Shortcut, "Open Cairn with Win+E").Changed() {
+			if ui.Checkbox(c, &reg.Shortcut, "Open MyFiles with Win+E").Changed() {
 				w.register(reg)
 			}
 			hint(c, "Both are settings of your user account alone, and turning them off puts back what was there.")
@@ -154,22 +183,11 @@ func (w *Window) dialogs(c *ui.Context) {
 					changed = true
 				}
 			})
-
-			ui.Row(c).Justify(ui.End).MarginY(4).Children(func() {
-				if ui.PrimaryButton(c, "Done").Clicked() {
-					w.settings = false
-				}
-			})
 		})
 	})
 	if changed {
 		a.saveSoon()
 		a.invalidate()
-	}
-	if !w.settings {
-		if t := w.current(); t != nil {
-			t.wantFocus = true
-		}
 	}
 }
 

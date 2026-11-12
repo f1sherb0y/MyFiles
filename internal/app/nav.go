@@ -7,9 +7,9 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/cli"
-	"cairn/internal/clock"
-	"cairn/internal/fsys"
+	"myfiles/internal/cli"
+	"myfiles/internal/clock"
+	"myfiles/internal/fsys"
 )
 
 // navMode is how a tab comes to a folder, which says what its history
@@ -173,11 +173,45 @@ func (w *Window) arrive(t *Tab, l *loaded, mode navMode, from visit, focus strin
 	if !same || t.unwatch == nil {
 		w.watch(t)
 	}
+	if p := w.layout.PaneOf(t.ID); !same && l.err == nil && p != nil && w.activeTab(p) == t {
+		// The tab shows: its first frame of the folder has the icons and
+		// the type names, where they come soon enough.
+		w.app.icons.await(iconWait, func() { w.foresee(t) })
+	}
 	if t.reload {
 		t.reload = false
 		w.refresh(t)
 	}
 	w.changed()
+}
+
+// foresee asks for the icons and the type names of the entries a folder's
+// first frame is about to show: as many as the tab's last frame built,
+// from the top, or around the entry chosen, which the view scrolls to.
+func (w *Window) foresee(t *Tab) {
+	a := w.app
+	n := t.span + 8
+	if t.span == 0 {
+		// A tab that has not shown yet: a screenful.
+		n = 80
+	}
+	n = min(n, 400, len(t.view))
+	first := 0
+	if t.cursor >= 0 {
+		first = t.cursor - n/2
+	}
+	first = max(min(first, len(t.view)-n), 0)
+	set := a.icons.at(viewSpecs[t.mode].icon)
+	names := t.Path != fsys.Computer && (t.mode == viewDetails || t.mode == viewTiles)
+	// The last asked for is the first answered: from the bottom up, for
+	// the top rows to come first.
+	for row := first + n - 1; row >= first; row-- {
+		e := t.entry(row)
+		set.forEntry(t.Path, e)
+		if names {
+			a.icons.typeName(e)
+		}
+	}
 }
 
 // prune takes out of the choice the names no entry has any more.

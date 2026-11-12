@@ -58,7 +58,7 @@ func newSandbox(installed, view string) (*sandbox, error) {
 			return nil, fmt.Errorf("no view called %q", view)
 		}
 	}
-	s := &sandbox{dir: filepath.Join(os.TempDir(), "cairn-expbench"), view: view}
+	s := &sandbox{dir: filepath.Join(os.TempDir(), "myfiles-expbench"), view: view}
 	s.exe = filepath.Join(s.dir, "Explorer++.exe")
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return nil, err

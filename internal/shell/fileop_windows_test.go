@@ -326,12 +326,12 @@ func TestDeletePermanently(t *testing.T) {
 }
 
 // TestDeleteToTrash leaves a file in the user's Recycle Bin, so it runs
-// only when asked to: CAIRN_TEST_TRASH=1.
+// only when asked to: MYFILES_TEST_TRASH=1.
 func TestDeleteToTrash(t *testing.T) {
-	if os.Getenv("CAIRN_TEST_TRASH") != "1" {
-		t.Skip("set CAIRN_TEST_TRASH=1 to put a file in the Recycle Bin")
+	if os.Getenv("MYFILES_TEST_TRASH") != "1" {
+		t.Skip("set MYFILES_TEST_TRASH=1 to put a file in the Recycle Bin")
 	}
-	path := filepath.Join(t.TempDir(), "cairn-test-delete-me.txt")
+	path := filepath.Join(t.TempDir(), "myfiles-test-delete-me.txt")
 	write(t, path, "delete me")
 	if err := within(t, func() error { return Delete(0, []string{path}, false) }); err != nil {
 		t.Fatal(err)

@@ -6,7 +6,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 // viewMode is how a tab shows its folder.
@@ -218,8 +218,8 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 	drives := t.Path == fsys.Computer
 	size := float32(icons.size)
 
-	if tx.iconSize != icons.size {
-		tx.icon, tx.iconSize = nil, icons.size
+	t.building++
+	if tx.fresh(icons.size, a.icons.epoch) {
 		tx.thumb, tx.thumbDone = nil, false
 	}
 	icon := tx.icon

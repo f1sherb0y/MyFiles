@@ -1,13 +1,13 @@
-// Cairn is a fast, compact file manager.
+// MyFiles is a fast, compact file manager.
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"cairn/internal/app"
-	"cairn/internal/cli"
-	"cairn/internal/shell"
+	"myfiles/internal/app"
+	"myfiles/internal/cli"
+	"myfiles/internal/shell"
 )
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 	cmd, err := cli.Parse(os.Args[1:], cwd)
 	if err != nil {
 		attachConsole()
-		fmt.Fprintf(os.Stderr, "cairn: %v\n\n%s", err, cli.Usage)
+		fmt.Fprintf(os.Stderr, "myfiles: %v\n\n%s", err, cli.Usage)
 		os.Exit(2)
 	}
 	switch {
@@ -26,7 +26,7 @@ func main() {
 		return
 	case cmd.Version:
 		attachConsole()
-		fmt.Println("cairn", app.Version)
+		fmt.Println("myfiles", app.Version)
 		return
 	case cmd.SetDefault != "":
 		attachConsole()
@@ -36,11 +36,11 @@ func main() {
 			err = shell.SetDefaultFileManager(exe, shell.Default{Folders: on, Shortcut: on})
 		}
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "cairn:", err)
+			fmt.Fprintln(os.Stderr, "myfiles:", err)
 			os.Exit(1)
 		}
 		if cmd.SetDefault == "on" {
-			fmt.Println("Cairn now opens folders, and Win+E.")
+			fmt.Println("MyFiles now opens folders, and Win+E.")
 		} else {
 			fmt.Println("Folders open in File Explorer again.")
 		}
@@ -51,7 +51,7 @@ func main() {
 	}
 	if err := app.Run(cmd); err != nil {
 		attachConsole()
-		fmt.Fprintln(os.Stderr, "cairn:", err)
+		fmt.Fprintln(os.Stderr, "myfiles:", err)
 		os.Exit(1)
 	}
 }

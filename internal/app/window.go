@@ -8,10 +8,10 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/config"
-	"cairn/internal/fsys"
-	"cairn/internal/shell"
-	"cairn/internal/workspace"
+	"myfiles/internal/config"
+	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
+	"myfiles/internal/workspace"
 )
 
 // iconPNG is the program's icon, which its windows show in the taskbar
@@ -50,13 +50,14 @@ type Window struct {
 	// within tells which panes held the keyboard focus in the last
 	// frame, to tell when it comes into one.
 	within map[workspace.PaneID]bool
+	// sys is the system's menu of what the last context menu was for.
+	sys *sysMenu
 
 	// spring is the tab files are dragged over, and springAt since
 	// when: held there, the tab shows, to drop into its folder.
 	spring   workspace.TabID
 	springAt time.Time
 
-	settings bool
 	// ask is the question in the window, nil for none.
 	ask *question
 
@@ -123,7 +124,7 @@ func (w *Window) attach(win frame) {
 // folders asked for, where they are read in time.
 func (a *App) show(w *Window) {
 	opts := mygo.WindowOptions{
-		Title:          "Cairn",
+		Title:          "MyFiles",
 		Width:          1180,
 		Height:         720,
 		TitleBarStyle:  mygo.TitleBarHidden,
@@ -160,6 +161,7 @@ func (a *App) window(session *config.Session) *Window {
 			t := &Tab{ID: st.ID, cursor: -1, mode: viewOf(st.View)}
 			t.sort = ui.SortOrder{Column: a.set.SortBy, Descending: a.set.SortDescending}
 			t.sorted = t.sort
+			t.settings = st.Path == settingsPath
 			w.tabs[t.ID] = t
 			if st.ID >= a.nextTab {
 				a.nextTab = st.ID + 1
@@ -184,7 +186,7 @@ func (w *Window) closed() {
 func (w *Window) start(session *config.Session) {
 	if session != nil {
 		for _, st := range session.Tabs {
-			if t := w.tabs[st.ID]; t != nil {
+			if t := w.tabs[st.ID]; t != nil && !t.settings {
 				w.navigate(t, st.Path, navReplace, "")
 			}
 		}
@@ -236,6 +238,10 @@ func (w *Window) current() *Tab {
 // there, and shows it. choose names an entry to choose in it.
 func (w *Window) newTab(pane workspace.PaneID, path, choose string) workspace.TabID {
 	a := w.app
+	if path == "" {
+		// From a tab that shows no folder, as the settings.
+		path = fsys.Home()
+	}
 	t := &Tab{ID: a.nextTab, cursor: -1, mode: viewOf(a.set.View)}
 	a.nextTab++
 	t.sort = ui.SortOrder{Column: a.set.SortBy, Descending: a.set.SortDescending}
@@ -336,7 +342,7 @@ func (w *Window) cycleTab(forward bool) {
 // one, or below it.
 func (w *Window) splitCurrent(zone workspace.Zone) {
 	p, t := w.layout.Focused(), w.current()
-	if p == nil || t == nil {
+	if p == nil || t == nil || t.settings {
 		return
 	}
 	id := w.newTab(p.ID, t.Path, "")
@@ -350,8 +356,8 @@ func (w *Window) changed() {
 	if w.win == nil {
 		return
 	}
-	if t := w.current(); t != nil && t.Path != "" {
-		w.win.SetTitle(t.title() + " - Cairn")
+	if t := w.current(); t != nil && (t.Path != "" || t.settings) {
+		w.win.SetTitle(t.title() + " - MyFiles")
 	}
 	if !w.building {
 		// Changed from outside the view, as by another instance of the
@@ -387,7 +393,11 @@ func (w *Window) save() {
 	s := config.Session{Layout: w.layout}
 	for _, id := range w.layout.Tabs() {
 		if t := w.tabs[id]; t != nil {
-			s.Tabs = append(s.Tabs, config.Tab{ID: id, Path: t.Path, View: viewSpecs[t.mode].id})
+			path := t.Path
+			if t.settings {
+				path = settingsPath
+			}
+			s.Tabs = append(s.Tabs, config.Tab{ID: id, Path: path, View: viewSpecs[t.mode].id})
 		}
 	}
 	_ = s.Save()

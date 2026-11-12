@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"cairn/internal/workspace"
+	"myfiles/internal/workspace"
 )
 
 // Settings are the user's preferences.
@@ -78,7 +78,7 @@ func Dir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(base, "Cairn")
+	dir := filepath.Join(base, "MyFiles")
 	return dir, os.MkdirAll(dir, 0o755)
 }
 

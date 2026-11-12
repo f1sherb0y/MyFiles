@@ -5,8 +5,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/fsys"
-	"cairn/internal/workspace"
+	"myfiles/internal/fsys"
+	"myfiles/internal/workspace"
 )
 
 // toolbar builds the row under a pane's tabs: the way back, forward and
@@ -68,7 +68,7 @@ func crumbWidth(name string, fontSize float32) float32 {
 func (w *Window) address(c *ui.Context, t *Tab) {
 	th := c.Theme()
 	box := ui.Row(c.Key("address")).Grow(1).Basis(0).MinWidth(60).Height(controlSize).MarginX(4).
-		Radius(4).Background(th.Surface).Clip().Bind(&t.addressRef)
+		Radius(4).Background(th.Surface).Clip()
 	if t.editing {
 		box.Border(1, th.Accent)
 		box.Children(func() {
@@ -95,9 +95,11 @@ func (w *Window) address(c *ui.Context, t *Tab) {
 
 	all := crumbsOf(t.Path)
 	// The components that fit, the deepest first to stay: those left
-	// out are behind an ellipsis.
+	// out are behind an ellipsis. The room is the pane's address's in the
+	// last frame, whichever tab showed then: a new tab's first frame
+	// leaves out what its later ones do.
 	first := 0
-	if room := t.addressRef.Bounds(c).W - 18; room > 0 {
+	if room := box.Bounds().W - 18; room > 0 {
 		var used float32
 		first = len(all) - 1
 		for i := len(all) - 1; i >= 0; i-- {

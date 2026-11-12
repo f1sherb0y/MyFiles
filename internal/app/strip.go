@@ -5,8 +5,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/fsys"
-	"cairn/internal/workspace"
+	"myfiles/internal/fsys"
+	"myfiles/internal/workspace"
 )
 
 // tabDrag is a tab being dragged: to another place among the tabs, to
@@ -166,7 +166,9 @@ func (w *Window) tab(c *ui.Context, p *workspace.Pane, t *Tab, index int, active
 	tab.ContextMenu(func(m *ui.Menu) { w.tabMenu(m, p, t) })
 	tab.Children(func() {
 		icon, _ := w.app.icons.forPath(t.Path, fsys.AttrDir)
-		if t.Path == fsys.Computer || t.Path == "" {
+		if t.settings {
+			ui.Icon(c, icoSettings).FontSize(14).Shrink(0)
+		} else if t.Path == fsys.Computer || t.Path == "" {
 			ui.Icon(c, icoComputer).FontSize(14).Shrink(0)
 		} else if icon != nil {
 			ui.Image(c, icon).Size(iconSize, iconSize).Shrink(0)
@@ -187,6 +189,9 @@ func (w *Window) tab(c *ui.Context, p *workspace.Pane, t *Tab, index int, active
 
 // tip is what resting the pointer on a tab shows: where it is.
 func (t *Tab) tip() string {
+	if t.settings {
+		return "Settings"
+	}
 	if t.Path == fsys.Computer {
 		return "This PC"
 	}
@@ -199,7 +204,7 @@ func (w *Window) tabMenu(m *ui.Menu, p *workspace.Pane, t *Tab) {
 	if m.Item("New Tab").Shortcut(ui.Cmd, ui.KeyT).Chosen() {
 		w.defer_(func() { w.newTab(pane, path, "") })
 	}
-	if m.Item("Duplicate Tab").Chosen() {
+	if m.Item("Duplicate Tab").Disabled(t.settings).Chosen() {
 		w.defer_(func() { w.newTab(pane, path, "") })
 	}
 	m.Separator()
@@ -217,7 +222,7 @@ func (w *Window) tabMenu(m *ui.Menu, p *workspace.Pane, t *Tab) {
 		w.defer_(func() { w.layout.Split(pane, id, workspace.ZoneTop); w.changed() })
 	}
 	m.Separator()
-	if m.Item("Copy Path").Chosen() {
+	if m.Item("Copy Path").Disabled(path == "").Chosen() {
 		w.copyText(path)
 	}
 	m.Separator()

@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 var (
@@ -79,20 +79,25 @@ func execute(owner Window, verb, path, dir string, mask uint32) error {
 	return nil
 }
 
+// errNoProgram says, within open, that no program opens the file.
+var errNoProgram = errors.New("no program opens the file")
+
 func open(owner Window, path, dir string) error {
+	err := openDefault(owner, path, dir)
+	if err == errNoProgram {
+		return openWith(owner, path)
+	}
+	return err
+}
+
+func openDefault(owner Window, path, dir string) error {
 	return onSTA(func() error {
 		err := execute(owner, "", path, dir, seeMaskInvokeIDList|seeMaskNoAsync|seeMaskNoUI)
 		if errors.Is(err, windows.ERROR_NO_ASSOCIATION) {
 			// No program opens files of the type: the user chooses one.
-			return execute(owner, "openas", path, dir, seeMaskInvokeIDList|seeMaskNoAsync)
+			return errNoProgram
 		}
 		return err
-	})
-}
-
-func openWith(owner Window, path string) error {
-	return onSTA(func() error {
-		return execute(owner, "openas", path, "", seeMaskInvokeIDList|seeMaskNoAsync)
 	})
 }
 

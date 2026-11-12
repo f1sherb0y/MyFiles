@@ -7,9 +7,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/clock"
-	"cairn/internal/fsys"
-	"cairn/internal/workspace"
+	"myfiles/internal/clock"
+	"myfiles/internal/fsys"
+	"myfiles/internal/workspace"
 )
 
 // The IDs of the columns of files.
@@ -30,8 +30,10 @@ type visit struct {
 // first time the row comes into view and kept while the listing lasts.
 type rowText struct {
 	icon *ui.Bitmap
-	// iconSize is the size icon is of, in DIPs: another view asks anew.
-	iconSize int
+	// iconSize is the size icon is of, in DIPs, and iconEpoch the count
+	// of replaced icons it was taken at: another view asks anew, and so
+	// does a row after an icon took another's place.
+	iconSize, iconEpoch int
 	// thumb is the picture of the file's content, where the view shows
 	// one, and thumbDone set once it is known whether there is one.
 	thumb     *ui.Bitmap
@@ -46,6 +48,9 @@ type Tab struct {
 	ID workspace.TabID
 	// Path is the folder shown, fsys.Computer for the list of drives.
 	Path string
+	// settings is set for the tab that shows the settings in place of a
+	// folder: it has no Path.
+	settings bool
 
 	// entries are the folder's, in the order read, and view the rows:
 	// indices into entries, filtered and sorted. text is parallel to
@@ -103,7 +108,7 @@ type Tab struct {
 	// asked is when the folder being loaded was asked for.
 	asked clock.Time
 	// trace are the moments of the last folder's way to the screen,
-	// printed when CAIRN_TRACE is set.
+	// printed when MYFILES_TRACE is set.
 	trace struct{ loaded, arrived, built clock.Time }
 	// unwatch stops watching the folder shown.
 	unwatch context.CancelFunc
@@ -116,9 +121,8 @@ type Tab struct {
 	editing bool
 	fresh   bool
 	addr    string
-	// addressRef and filterRef are the address and the filter field, to
-	// measure the one and focus the other.
-	addressRef, filterRef ui.Handle
+	// filterRef is the filter field, to focus it.
+	filterRef ui.Handle
 	// wantFocus gives the rows the keyboard once they are built.
 	wantFocus bool
 	// rename is the name of the entry to start renaming once it shows.
@@ -130,10 +134,27 @@ type Tab struct {
 	// shownAt is when a folder was asked for whose rows have not
 	// reached the screen yet.
 	shownAt clock.Time
+	// span is how many entries the last frame built, which is about how
+	// many the next folder's first frame shows; building counts those
+	// of the frame being built.
+	span, building int
+}
+
+// fresh forgets the icon a row holds when it is of another size or was
+// taken before an icon took another's place, and tells whether it did.
+func (tx *rowText) fresh(size, epoch int) bool {
+	if tx.iconSize == size && tx.iconEpoch == epoch {
+		return false
+	}
+	tx.icon, tx.iconSize, tx.iconEpoch = nil, size, epoch
+	return true
 }
 
 // title is what the tab's header shows.
 func (t *Tab) title() string {
+	if t.settings {
+		return "Settings"
+	}
 	if t.Path == fsys.Computer {
 		return "This PC"
 	}

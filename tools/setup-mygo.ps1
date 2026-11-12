@@ -1,5 +1,5 @@
-# Fetches MyGo at the commit Cairn builds against into third_party\mygo and
-# applies Cairn's changes to it (patches\mygo.patch). Run once after
+# Fetches MyGo at the commit MyFiles builds against into third_party\mygo and
+# applies MyFiles's changes to it (patches\mygo.patch). Run once after
 # cloning; go.mod points at the result.
 $ErrorActionPreference = 'Stop'
 $commit = 'd40e0b7a66d1f7d40ab437861b506afd38f1519c'
@@ -15,4 +15,4 @@ git -C $dir remote add origin https://github.com/egoist/mygo.git
 git -C $dir fetch -q --depth 1 origin $commit
 git -C $dir checkout -q FETCH_HEAD
 git -C $dir apply (Join-Path $root 'patches\mygo.patch')
-Write-Host "MyGo $($commit.Substring(0,7)) with Cairn's patch is in third_party\mygo."
+Write-Host "MyGo $($commit.Substring(0,7)) with MyFiles's patch is in third_party\mygo."

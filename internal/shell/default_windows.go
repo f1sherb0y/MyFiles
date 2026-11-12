@@ -27,14 +27,14 @@ var (
 	classesRoot = userClasses
 	// backupRoot is where what was registered before is kept, to put it
 	// back.
-	backupRoot = `Software\Cairn\DefaultBackup`
+	backupRoot = `Software\MyFiles\DefaultBackup`
 )
 
 const (
 	// folderVerb is the name of the verb that opens a folder here.
-	folderVerb = "cairn"
+	folderVerb = "myfiles"
 	// folderVerbTitle is what the verb is called in menus.
-	folderVerbTitle = "Open in Cairn"
+	folderVerbTitle = "Open in MyFiles"
 	// explorerLaunch is the shell's object that Win+E, and explorer.exe
 	// without a folder, start: its "opennewwindow" verb opens the file
 	// manager.

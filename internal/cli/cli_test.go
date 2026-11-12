@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 func TestParse(t *testing.T) {

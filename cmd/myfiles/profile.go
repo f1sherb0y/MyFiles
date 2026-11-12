@@ -8,9 +8,9 @@ import (
 )
 
 // profile writes a CPU profile of the program's first moments to the
-// file CAIRN_PROFILE names, for finding what its start waits on.
+// file MYFILES_PROFILE names, for finding what its start waits on.
 func profile() {
-	path := os.Getenv("CAIRN_PROFILE")
+	path := os.Getenv("MYFILES_PROFILE")
 	if path == "" {
 		return
 	}

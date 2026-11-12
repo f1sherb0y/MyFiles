@@ -1,5 +1,5 @@
 // Expbench times how fast Explorer++ shows a folder, from outside, for
-// comparison with Cairn's own benchmark (cairn --bench).
+// comparison with MyFiles's own benchmark (myfiles --bench).
 //
 // It runs a private copy of the installed Explorer++, with settings of
 // its own, takes it through a list of folders by its address bar, and
@@ -7,11 +7,11 @@
 //
 //	expbench -out out\explorerpp.json
 //
-// It also times Cairn's start the way it times Explorer++'s, and prints
+// It also times MyFiles's start the way it times Explorer++'s, and prints
 // two reports side by side:
 //
-//	expbench -cairn-startup bin\cairn.exe C:\ -out out\cairn-startup.json
-//	expbench -compare out\cairn.json out\explorerpp.json -startup out\cairn-startup.json -md out\compare.md
+//	expbench -myfiles-startup bin\myfiles.exe C:\ -out out\myfiles-startup.json
+//	expbench -compare out\myfiles.json out\explorerpp.json -startup out\myfiles-startup.json -md out\compare.md
 package main
 
 import (
@@ -41,11 +41,11 @@ func (f *files) Set(v string) error { *f = append(*f, v); return nil }
 
 func main() {
 	var (
-		o            options
-		compare      bool
-		md           string
-		startups     files
-		cairnStartup string
+		o              options
+		compare        bool
+		md             string
+		startups       files
+		myfilesStartup string
 	)
 	fs := flag.NewFlagSet("expbench", flag.ExitOnError)
 	fs.StringVar(&o.folders, "folders", `tools\bench-folders.txt`, "the `file` listing the folders to enter, one a line")
@@ -60,13 +60,13 @@ func main() {
 	fs.BoolVar(&o.verbose, "v", false, "print every navigation")
 	fs.StringVar(&o.shots, "shots", "", "a `folder` to save pictures in, of what the list view shows as each measurement ends")
 	fs.DurationVar(&messageTimeout, "timeout", messageTimeout, "how long Explorer++ may take over one folder")
-	fs.StringVar(&cairnStartup, "cairn-startup", "", "time the start of this Cairn `exe` in the folder that follows, instead")
+	fs.StringVar(&myfilesStartup, "myfiles-startup", "", "time the start of this MyFiles `exe` in the folder that follows, instead")
 	fs.BoolVar(&compare, "compare", false, "print the two reports that follow side by side, instead")
 	fs.StringVar(&md, "md", "", "with -compare, the `file` to write the table to, as Markdown")
-	fs.Var(&startups, "startup", "with -compare, a `file` from -cairn-startup -out: the startup time to show for its app")
+	fs.Var(&startups, "startup", "with -compare, a `file` from -myfiles-startup -out: the startup time to show for its app")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: expbench [flags]")
-		fmt.Fprintln(os.Stderr, "       expbench -cairn-startup cairn.exe folder [-startups n] [-out file]")
+		fmt.Fprintln(os.Stderr, "       expbench -myfiles-startup myfiles.exe folder [-startups n] [-out file]")
 		fmt.Fprintln(os.Stderr, "       expbench -compare a.json b.json [-startup file] [-md file]")
 		fs.PrintDefaults()
 	}
@@ -96,12 +96,12 @@ func main() {
 			os.Exit(2)
 		}
 		err = runCompare(names[0], names[1], startups, md)
-	case cairnStartup != "":
+	case myfilesStartup != "":
 		if len(names) != 1 {
 			fs.Usage()
 			os.Exit(2)
 		}
-		err = runCairnStartup(cairnStartup, names[0], o.startups, o.out)
+		err = runMyFilesStartup(myfilesStartup, names[0], o.startups, o.out)
 	default:
 		if len(names) != 0 || o.rounds < 1 || o.startups < 1 {
 			fs.Usage()

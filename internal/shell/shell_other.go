@@ -6,7 +6,7 @@ import (
 	"image"
 	"sync"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 // On the platforms the package has not been written for yet, a worker is
@@ -77,6 +77,10 @@ func open(owner Window, path, dir string) error { return ErrUnsupported }
 
 func openWith(owner Window, path string) error { return ErrUnsupported }
 
+func apps(path string) []App { return nil }
+
+func openIn(owner Window, path string, app App) error { return ErrUnsupported }
+
 func properties(owner Window, paths []string) error { return ErrUnsupported }
 
 func transfer(owner Window, sources []string, destDir string, move bool) error {
@@ -94,6 +98,16 @@ func newFile(dir, name string) (string, error) { return "", ErrUnsupported }
 func contextMenu(Window, []string, string, int, int) (MenuAction, error) {
 	return MenuDone, ErrUnsupported
 }
+
+type systemMenu struct{ items []MenuItem }
+
+func loadMenu(Window, []string, string) (*SystemMenu, error) { return nil, ErrUnsupported }
+
+func (s *systemMenu) sub(int) []MenuItem { return nil }
+
+func (s *systemMenu) invoke(int) (MenuAction, error) { return MenuDone, ErrUnsupported }
+
+func (s *systemMenu) close() {}
 
 func openInSystem(string) error { return ErrUnsupported }
 

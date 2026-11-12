@@ -173,6 +173,17 @@ var hosts struct {
 // menu may take as long as the user does) is not waited for: another is
 // started, and both are kept.
 func onHost(fn func() error) error {
+	t := takeHost()
+	var err error
+	t.run(func() { err = fn() })
+	giveHost(t)
+	return err
+}
+
+// takeHost is a host thread that runs nothing, the caller's until it is
+// given back: for what makes several calls on one thread, as a menu
+// built, read and then run.
+func takeHost() *thread {
 	hosts.mu.Lock()
 	var t *thread
 	if n := len(hosts.idle); n > 0 {
@@ -182,10 +193,12 @@ func onHost(fn func() error) error {
 	if t == nil {
 		t = startThread(true)
 	}
-	var err error
-	t.run(func() { err = fn() })
+	return t
+}
+
+// giveHost gives a host thread back.
+func giveHost(t *thread) {
 	hosts.mu.Lock()
 	hosts.idle = append(hosts.idle, t)
 	hosts.mu.Unlock()
-	return err
 }

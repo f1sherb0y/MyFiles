@@ -10,17 +10,17 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"cairn/internal/cli"
-	"cairn/internal/clock"
-	"cairn/internal/fsys"
-	"cairn/internal/workspace"
+	"myfiles/internal/cli"
+	"myfiles/internal/clock"
+	"myfiles/internal/fsys"
+	"myfiles/internal/workspace"
 )
 
 // Started is when the program started, as nearly as it can tell.
 var Started = clock.Now()
 
 // mark prints how long after the program's start something happened,
-// when CAIRN_TRACE is set: where the time to the first frame goes.
+// when MYFILES_TRACE is set: where the time to the first frame goes.
 func mark(what string) {
 	if tracing {
 		os.Stderr.WriteString("trace " + what + " at " + formatDuration(clock.Since(Started)) + "\n")
@@ -78,7 +78,7 @@ type bench struct {
 
 func newBench(cmd *cli.Command) *bench {
 	b := &bench{cmd: cmd}
-	b.report.App = "cairn " + Version
+	b.report.App = "myfiles " + Version
 	b.report.Rounds = cmd.BenchRounds
 	if f, err := os.Open(cmd.Bench); err == nil {
 		defer f.Close()

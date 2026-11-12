@@ -1,13 +1,16 @@
 package app
 
 import (
+	"bytes"
+	"image/png"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/fsys"
-	"cairn/internal/shell"
+	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
 )
 
 // fileDrop is what takes files dragged from a pane, another window or
@@ -344,6 +347,73 @@ func (w *Window) folderProperties(t *Tab) {
 func (w *Window) openWith(path string) {
 	owner := w.handle()
 	go func() { w.report(w.app.desk.openWith(owner, path)) }()
+}
+
+// openIn opens a file with one of the programs for its type.
+func (w *Window) openIn(path string, app shell.App) {
+	owner := w.handle()
+	go func() { w.report(w.app.desk.openIn(owner, path, app)) }()
+}
+
+// appsFresh is how long the programs listed for a type are taken for the
+// ones there are: one installed meanwhile shows the next time.
+const appsFresh = 30 * time.Second
+
+// typeApps are the programs that open the files of a type, and when
+// they were asked for; known is set once the system answered.
+type typeApps struct {
+	apps []shell.App
+	// icons are the programs' icons as menus show them, parallel to apps:
+	// nil for a program without one.
+	icons []ui.MenuIcon
+	asked time.Time
+	known bool
+}
+
+// appsFor lists the programs that open a file, by its type, and whether
+// the system has said yet. Asking takes the system a moment, on another
+// thread: the menu that shows them is built again when they come.
+func (w *Window) appsFor(path string) (*typeApps, bool) {
+	a := w.app
+	ext := fsys.ExtOf(fsys.Base(path))
+	if ext == "" {
+		return &typeApps{known: true}, true
+	}
+	if a.apps == nil {
+		a.apps = map[string]*typeApps{}
+	}
+	ta := a.apps[ext]
+	if ta == nil {
+		ta = &typeApps{}
+		a.apps[ext] = ta
+	}
+	if time.Since(ta.asked) > appsFresh {
+		ta.asked = time.Now()
+		go func() {
+			apps := a.desk.apps(path)
+			pictures := make([][]byte, len(apps))
+			for i, app := range apps {
+				var buf bytes.Buffer
+				if app.Icon != nil && png.Encode(&buf, app.Icon) == nil {
+					pictures[i] = buf.Bytes()
+				}
+			}
+			w.update(func() {
+				icons := make([]ui.MenuIcon, len(apps))
+				for i, data := range pictures {
+					if data == nil {
+						continue
+					}
+					if icon, err := a.desk.menuIcon(data); err == nil {
+						icons[i] = icon
+					}
+				}
+				ta.apps, ta.icons, ta.known = apps, icons, true
+				w.invalidate()
+			})
+		}()
+	}
+	return ta, ta.known
 }
 
 // systemMenu shows the system's own context menu at the pointer, for

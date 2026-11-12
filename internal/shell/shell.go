@@ -16,7 +16,7 @@ import (
 	"errors"
 	"image"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 // ErrCanceled is returned when the user gave up an operation, as by
@@ -86,8 +86,25 @@ func TypeName(ext string, dir bool) string { return typeName(ext, dir) }
 // file of a type no program opens, the system asks which should.
 func Open(owner Window, path, dir string) error { return open(owner, path, dir) }
 
-// OpenWith asks the user which program opens the file.
+// OpenWith asks the user which program opens the file, in the system's
+// dialog, and opens it with the one chosen.
 func OpenWith(owner Window, path string) error { return openWith(owner, path) }
+
+// App is a program that opens files of a type: Name is what the system
+// calls it, ID tells it from the others, and Icon is its icon, nil for a
+// program without one.
+type App struct {
+	Name, ID string
+	Icon     *image.RGBA
+}
+
+// Apps lists the programs the system recommends for opening a file, by
+// its extension, in the system's order: none for a file without one. It
+// looks at no file, and takes a few milliseconds: not for the main thread.
+func Apps(path string) []App { return apps(path) }
+
+// OpenIn opens a file with one of the programs Apps listed.
+func OpenIn(owner Window, path string, app App) error { return openIn(owner, path, app) }
 
 // Properties shows the system's properties of files or directories.
 func Properties(owner Window, paths []string) error { return properties(owner, paths) }
@@ -145,6 +162,51 @@ const (
 func ContextMenu(owner Window, paths []string, background string, x, y int) (MenuAction, error) {
 	return contextMenu(owner, paths, background, x, y)
 }
+
+// SystemMenu is the system's context menu for files or directories, read
+// for a program to draw in its own menus rather than shown: what other
+// programs added to the system's menu is in it. Building it is what takes
+// the system long (a second the first time, a tenth after): LoadMenu, and
+// the methods, are not for the main thread. Close it when done.
+type SystemMenu struct{ s *systemMenu }
+
+// MenuItem is an item of the system's menu.
+type MenuItem struct {
+	// Text is what the item says.
+	Text string
+	// Icon is the item's picture, nil for none.
+	Icon *image.RGBA
+	// ID names the command to Invoke; it is 0 for a separator, and for
+	// an item that opens a submenu, whose Sub is not.
+	ID  int
+	Sub int
+	// Verb is the name the command goes by, as "delete", where it has
+	// one.
+	Verb                         string
+	Separator, Disabled, Checked bool
+}
+
+// LoadMenu builds the system's menu as ContextMenu shows it: for paths of
+// one directory, or for the background of a directory.
+func LoadMenu(owner Window, paths []string, background string) (*SystemMenu, error) {
+	return loadMenu(owner, paths, background)
+}
+
+// Items are the items of the menu's top level. Those the programs that
+// added them draw themselves, saying nothing of what they show, are left
+// out.
+func (m *SystemMenu) Items() []MenuItem { return m.s.items }
+
+// Submenu lists the submenu of an item, by the item's Sub, filled as the
+// item opens it.
+func (m *SystemMenu) Submenu(sub int) []MenuItem { return m.s.sub(sub) }
+
+// Invoke runs a command of the menu, by an item's ID, and returns what is
+// left for the caller to do.
+func (m *SystemMenu) Invoke(id int) (MenuAction, error) { return m.s.invoke(id) }
+
+// Close gives the menu up.
+func (m *SystemMenu) Close() { m.s.close() }
 
 // OpenInSystem hands a place to the system's own file manager: one that
 // is no directory, as the Recycle Bin, which this program cannot show.

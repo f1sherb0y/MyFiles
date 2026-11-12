@@ -5,9 +5,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/clock"
-	"cairn/internal/fsys"
-	"cairn/internal/workspace"
+	"myfiles/internal/clock"
+	"myfiles/internal/fsys"
+	"myfiles/internal/workspace"
 )
 
 // edges tells which edges of the window a pane touches: along the top
@@ -117,6 +117,10 @@ func (w *Window) pane(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBar
 	col.Children(func() {
 		w.strip(c, p, e, bar, focused)
 		if t == nil {
+			return
+		}
+		if t.settings {
+			w.settingsPage(c)
 			return
 		}
 		w.toolbar(c, p, t)

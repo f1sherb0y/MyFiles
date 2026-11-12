@@ -187,7 +187,7 @@ index 9183c29..49e4d13 100644
  	rt.requestFrame()
  	return true
 diff --git a/ui/gridview.go b/ui/gridview.go
-index f4444dc..09c3578 100644
+index f4444dc..dfaffbe 100644
 --- a/ui/gridview.go
 +++ b/ui/gridview.go
 @@ -3,6 +3,8 @@ package ui
@@ -221,7 +221,7 @@ index f4444dc..09c3578 100644
  
  	rows ListState
  	// cells are the items of the cells the last frame built, by their
-@@ -96,6 +113,12 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
+@@ -96,10 +113,24 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
  	wrapElement(e).Bind(&s.Handle)
  	n = max(n, 0)
  	gap := t.Space(2)
@@ -232,9 +232,23 @@ index f4444dc..09c3578 100644
 +		gap = 0
 +	}
  	// The columns: those that fit the width the rows had in the last
- 	// frame, or the window's, first. The layout builds the next frame
- 	// again where they changed.
-@@ -255,8 +278,15 @@ func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
+-	// frame, or the window's, first. The layout builds the next frame
+-	// again where they changed.
++	// frame. For a state that has not shown yet, the width its element
++	// had, as when an app gives the grid a new state for other items;
++	// for a new element, that of the nearest element around it that
++	// showed, which a grid most often fills; and the window's, first.
++	// The layout builds the next frame again where they changed.
+ 	width := s.rows.width
++	for p := e; width <= 0 && p != nil; p = p.parent {
++		if p.st != nil {
++			width = p.st.cw
++		}
++	}
+ 	if width <= 0 {
+ 		width = c.w
+ 	}
+@@ -255,8 +286,15 @@ func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
  // cell builds item i of a grid, choosing it when clicked.
  func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item func(i int)) *node {
  	t := c.theme
@@ -251,7 +265,7 @@ index f4444dc..09c3578 100644
  	cell.setPos, cell.setSize = i+1, n
  	if s.Label != nil {
  		cell.Label(s.Label(i))
-@@ -274,6 +304,12 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+@@ -274,6 +312,12 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
  			cell.Opacity(0.4)
  		}
  	}
@@ -264,7 +278,7 @@ index f4444dc..09c3578 100644
  	if s.Selected != nil {
  		cell.flags |= flagClickable | flagHover | flagChoosable
  		cell.afterInput(func() {
-@@ -290,9 +326,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+@@ -290,9 +334,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
  		cell.checked = 1 + int8(b2f(chosen))
  		switch {
  		case chosen && grid.Focused():
@@ -276,7 +290,7 @@ index f4444dc..09c3578 100644
  		default:
  			cell.styleFn = func(cell *node) {
  				if cell.Hovered() {
-@@ -309,6 +345,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+@@ -309,6 +353,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
  			})
  		}
  	}
@@ -286,6 +300,47 @@ index f4444dc..09c3578 100644
  	cell.Children(func() { item(i) })
  	return cell
  }
+diff --git a/ui/gridview_test.go b/ui/gridview_test.go
+index d8f63b6..c54c5d5 100644
+--- a/ui/gridview_test.go
++++ b/ui/gridview_test.go
+@@ -183,6 +183,36 @@ func TestGridViewShiftAfterItemsRemoved(t *testing.T) {
+ 	}
+ }
+ 
++// TestGridViewNewStateKeepsColumns checks that a grid given a new state,
++// as an app does to show other items in it, takes the columns its element
++// had from the first frame: not the window's, to change in the next.
++func TestGridViewNewStateKeepsColumns(t *testing.T) {
++	s := &GridState{}
++	var first []int
++	tt := coreNewTester(func(c *context) {
++		coreRow(c).Grow(1).Children(func() {
++			coreBox(c).Width(216).Shrink(0)
++			coreGridView(c, s, 100, 100, 80, func(i int) {
++				coreTextf(c, "Item %d", i)
++			}).Grow(1)
++		})
++		first = append(first, s.cols)
++	}, 664, 300)
++	tt.Frame()
++	// 448 wide beside the box: (448 + 8) / 108, 4 columns.
++	if s.cols != 4 {
++		t.Fatalf("%d columns", s.cols)
++	}
++	s, first = &GridState{}, nil
++	tt.Frame()
++	tt.Frame()
++	for i, cols := range first {
++		if cols != 4 {
++			t.Errorf("frame %d of the new state built %d columns", i, cols)
++		}
++	}
++}
++
+ func TestGridViewResizes(t *testing.T) {
+ 	sel := 13
+ 	s := GridState{Selected: &sel}
 diff --git a/ui/list.go b/ui/list.go
 index 31b5903..d78c8fe 100644
 --- a/ui/list.go

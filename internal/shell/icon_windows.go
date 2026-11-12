@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"cairn/internal/fsys"
+	"myfiles/internal/fsys"
 )
 
 var (

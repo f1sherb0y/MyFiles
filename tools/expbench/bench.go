@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// folderTimes is the timings of one folder, as Cairn's own benchmark
+// folderTimes is the timings of one folder, as MyFiles's own benchmark
 // writes them.
 type folderTimes struct {
 	Path    string `json:"path"`
@@ -29,7 +29,7 @@ type folderTimes struct {
 	EntriesOnDisk int `json:"entriesOnDisk,omitempty"`
 }
 
-// report is what a benchmark writes: Cairn's shape, and a little more.
+// report is what a benchmark writes: MyFiles's shape, and a little more.
 type report struct {
 	App string `json:"app"`
 	// StartupMs is the median of StartupRunsMs: each the time from just
@@ -37,7 +37,7 @@ type report struct {
 	StartupMs     float64   `json:"startupMs"`
 	StartupRunsMs []float64 `json:"startupRunsMs,omitempty"`
 	// StartupFrom is where StartupMs is counted from: "CreateProcess"
-	// here; Cairn's own report, which has no such field, counts from the
+	// here; MyFiles's own report, which has no such field, counts from the
 	// first thing its process does.
 	StartupFrom   string        `json:"startupFrom,omitempty"`
 	StartupFolder string        `json:"startupFolder,omitempty"`
@@ -50,7 +50,7 @@ type report struct {
 	Conditions string   `json:"conditions,omitempty"`
 	Warnings   []string `json:"warnings,omitempty"`
 
-	// Cairn's report has these: the performance counter when its first
+	// MyFiles's report has these: the performance counter when its first
 	// folder was shown, and the counter's frequency.
 	FirstShownTicks int64 `json:"firstShownTicks,omitempty"`
 	TicksPerSecond  int64 `json:"ticksPerSecond,omitempty"`
@@ -204,7 +204,7 @@ func runBench(o options) error {
 				}
 			}
 
-			// Rest in the folder, as someone would, and as Cairn's
+			// Rest in the folder, as someone would, and as MyFiles's
 			// benchmark does: from when it was shown.
 			time.Sleep(o.pause - time.Duration(ms(v.shown, now())*float64(time.Millisecond)))
 
@@ -281,7 +281,7 @@ func entriesOnDisk(path string) int {
 }
 
 // median is the middle of some timings: the upper middle of an even
-// number of them, as Cairn's benchmark takes it.
+// number of them, as MyFiles's benchmark takes it.
 func median(v []float64) float64 {
 	if len(v) == 0 {
 		return 0

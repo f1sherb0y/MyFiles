@@ -7,9 +7,9 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
-	"cairn/internal/clock"
-	"cairn/internal/fsys"
-	"cairn/internal/workspace"
+	"myfiles/internal/clock"
+	"myfiles/internal/fsys"
+	"myfiles/internal/workspace"
 )
 
 // The columns of a folder's rows, and of the list of drives, which keeps
@@ -30,7 +30,7 @@ var (
 )
 
 // tracing prints the parts of each folder's way to the screen.
-var tracing = os.Getenv("CAIRN_TRACE") != ""
+var tracing = os.Getenv("MYFILES_TRACE") != ""
 
 // files builds a tab's folder, in the view the tab shows it in.
 func (w *Window) files(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
@@ -65,11 +65,13 @@ func (w *Window) files(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 		})
 	}
 
+	t.building = 0
 	if t.mode == viewDetails {
 		w.details(c, t, focused)
 	} else {
 		w.grid(c, t, focused)
 	}
+	t.span = t.building
 	if len(t.view) == 0 && !t.loading && t.Path != "" {
 		msg := "This folder is empty"
 		if t.filter != "" {
@@ -167,9 +169,8 @@ func (w *Window) cell(c *ui.Context, t *Tab, row, col int) {
 	drives := t.Path == fsys.Computer
 	switch col {
 	case 0:
-		if tx.iconSize != iconSize {
-			tx.icon, tx.iconSize = nil, iconSize
-		}
+		t.building++
+		tx.fresh(iconSize, a.icons.epoch)
 		if tx.icon == nil {
 			if icon, final := a.icons.at(iconSize).forEntry(t.Path, e); final {
 				tx.icon = icon
@@ -332,8 +333,29 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 				w.changed()
 			})
 		}
-	} else if m.Item("Open With…").Chosen() {
-		w.openWith(path)
+	} else {
+		// Asked for as the menu opens: there by the time the submenu is.
+		ta, known := w.appsFor(path)
+		m.Submenu("Open With", func(m *ui.Menu) {
+			for i, app := range ta.apps {
+				item := m.Item(app.Name).ID(app.ID)
+				if i < len(ta.icons) && ta.icons[i] != nil {
+					item.Icon(ta.icons[i])
+				}
+				if item.Chosen() {
+					w.openIn(path, app)
+				}
+			}
+			if !known {
+				m.Item("Looking for programs…").Disabled(true)
+			}
+			if len(ta.apps) > 0 || !known {
+				m.Separator()
+			}
+			if m.Item("Choose Another App…").Chosen() {
+				w.openWith(path)
+			}
+		})
 	}
 	m.Separator()
 	if !drives {
@@ -360,9 +382,7 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 		}
 	}
 	m.Separator()
-	if m.Item("More Options…").Chosen() {
-		w.systemMenu(t, false)
-	}
+	w.more(m, t, false)
 	if m.Item("Properties").Shortcut(ui.Alt, ui.KeyEnter).Chosen() {
 		w.properties(t)
 	}
@@ -394,9 +414,7 @@ func (w *Window) folderMenu(m *ui.Menu, t *Tab) {
 		w.setHidden(!hidden)
 	}
 	m.Separator()
-	if m.Item("More Options…").Chosen() {
-		w.systemMenu(t, true)
-	}
+	w.more(m, t, true)
 	if m.Item("Properties").Chosen() {
 		w.folderProperties(t)
 	}
