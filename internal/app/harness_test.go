@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,6 +16,7 @@ import (
 
 	"myfiles/internal/config"
 	"myfiles/internal/shell"
+	"myfiles/internal/watch"
 	"myfiles/internal/workspace"
 )
 
@@ -53,9 +56,16 @@ func (f *fakeFrame) take() []func() {
 // fakeDesk is a clipboard in memory, and a main thread that is the
 // test's.
 type fakeDesk struct {
-	frame    *fakeFrame
-	data     transfer.Data
-	text     string
+	frame   *fakeFrame
+	data    transfer.Data
+	text    string
+	locale  string
+	bin     []shell.TrashItem
+	quick   []shell.QuickFolder
+	linux   []string
+	network []string
+	// newer is the version an update check finds, "" for none.
+	newer    string
 	released func()
 
 	mu       sync.Mutex
@@ -81,7 +91,10 @@ func (d *fakeDesk) writeText(s string) {
 	_ = d.write(transfer.TextData(s), nil)
 	d.text = s
 }
-func (d *fakeDesk) appearance(string) {}
+func (d *fakeDesk) appearance(string)    {}
+func (d *fakeDesk) languages() []string  { return []string{"en", "zh-Hans"} }
+func (d *fakeDesk) chosenLocale() string { return d.locale }
+func (d *fakeDesk) setLocale(tag string) { d.locale = tag }
 
 // Nothing of the system's shows in a test, and no program starts: what
 // would have is noted.
@@ -211,6 +224,9 @@ func newHarness(t *testing.T, entries ...string) *harness {
 	desk := &fakeDesk{frame: f}
 	a := &App{set: config.Defaults(), nextTab: 1, desk: desk, ephemeral: true}
 	a.set.Sidebar = false
+	a.side = newPlaces(&a.set, nil)
+	a.hub = watch.New()
+	t.Cleanup(a.hub.Close)
 	a.icons = newIcons(1, desk.post, func() {}, nil)
 	w := a.window(nil)
 	w.attach(f)
@@ -360,4 +376,62 @@ func (h *harness) open(rel string) workspace.TabID {
 	id := h.w.newTab(h.w.layout.Focus, h.path(rel), "")
 	h.settle()
 	return id
+}
+
+// update finds the version the test has newer, and notes its install.
+func (d *fakeDesk) update(context.Context) (string, func(context.Context) error, error) {
+	if d.newer == "" {
+		return "", nil, nil
+	}
+	return d.newer, func(context.Context) error { d.note("install " + d.newer); return nil }, nil
+}
+
+func (d *fakeDesk) relaunch() { d.note("relaunch") }
+
+// The system a test sees has no Quick access and no network but what the
+// test gives it.
+func (d *fakeDesk) displayName(string) string        { return "" }
+func (d *fakeDesk) quickAccess() []shell.QuickFolder { return d.quick }
+func (d *fakeDesk) distros() []string                { return d.linux }
+func (d *fakeDesk) computers() []string              { return d.network }
+func (d *fakeDesk) shares(computer string) ([]string, error) {
+	return []string{"public"}, nil
+}
+
+// The Recycle Bin of a test holds what the test puts in it, and notes
+// what is done there.
+func (d *fakeDesk) trash() ([]shell.TrashItem, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return slices.Clone(d.bin), nil
+}
+func (d *fakeDesk) restoreTrash(paths []string) ([]string, error) {
+	var restored []string
+	d.mu.Lock()
+	for _, p := range paths {
+		for _, it := range d.bin {
+			if it.Path == p {
+				restored = append(restored, filepath.Join(it.From, it.Name))
+			}
+		}
+	}
+	d.bin = slices.DeleteFunc(d.bin, func(it shell.TrashItem) bool { return slices.Contains(paths, it.Path) })
+	d.mu.Unlock()
+	d.note("restore " + strings.Join(paths, ", "))
+	return restored, nil
+}
+func (d *fakeDesk) deleteTrash(paths []string) error {
+	d.mu.Lock()
+	d.bin = slices.DeleteFunc(d.bin, func(it shell.TrashItem) bool { return slices.Contains(paths, it.Path) })
+	d.mu.Unlock()
+	d.note("delete for good " + strings.Join(paths, ", "))
+	return nil
+}
+func (d *fakeDesk) trashFolders() []string { return nil }
+func (d *fakeDesk) emptyTrash(shell.Window) error {
+	d.mu.Lock()
+	d.bin = nil
+	d.mu.Unlock()
+	d.note("empty the bin")
+	return nil
 }

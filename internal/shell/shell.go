@@ -208,6 +208,79 @@ func (m *SystemMenu) Invoke(id int) (MenuAction, error) { return m.s.invoke(id) 
 // Close gives the menu up.
 func (m *SystemMenu) Close() { m.s.close() }
 
+// The system's own places that are no paths, by names Icon and
+// DisplayName take, and OpenInSystem shows.
+const (
+	RecycleBin = placeRecycleBin
+	ThisPC     = placeComputer
+	Network    = placeNetwork
+	Linux      = placeLinux
+)
+
+// DisplayName is what the system calls a folder, or one of its places,
+// where it shows it: "Documents" in the user's language, a drive with its
+// label. It is "" where the system has none. Not for the main thread.
+func DisplayName(path string) string { return displayName(path) }
+
+// QuickFolder is a folder of the system's file manager's Quick access.
+type QuickFolder struct {
+	// Path is the folder's, or the name of a place that is no path.
+	Path   string
+	Pinned bool
+}
+
+// QuickAccess lists the folders of the system's file manager's Quick
+// access, in its order: those the user pinned, then those it adds itself.
+// It builds each one's menu to tell which, and takes a tenth of a second
+// a folder.
+func QuickAccess() []QuickFolder { return quickAccess() }
+
+// Distros lists the Linux distributions installed beside the system,
+// whose files are under DistroRoot(name).
+func Distros() []string { return distros() }
+
+// DistroRoot is where a Linux distribution's files are.
+func DistroRoot(name string) string { return `\\wsl.localhost\` + name + `\` }
+
+// Computers lists the computers the network shows nearby, as `\\NAME`, and
+// Shares the folders one of them shares, by name. Both ask the network,
+// which may take seconds.
+func Computers() []string                      { return computers() }
+func Shares(computer string) ([]string, error) { return shares(computer) }
+
+// TrashItem is something in the Recycle Bin.
+type TrashItem struct {
+	// Name is the name it had, and From the folder it was in.
+	Name, From string
+	// Path is where it is kept now, which tells it from the others and
+	// names it to RestoreTrash and DeleteTrash.
+	Path string
+	// Deleted is when it was deleted, in nanoseconds since 1970, and Size
+	// its size in bytes, with what it holds for a folder.
+	Deleted, Size int64
+	Dir           bool
+}
+
+// Trash lists what the Recycle Bin holds, of every drive. Not for the
+// main thread.
+// TrashFolders are the folders the Recycle Bin keeps the user's items in,
+// one on each drive that has one.
+func TrashFolders() []string { return trashFolders() }
+
+func Trash() ([]TrashItem, error) { return trash() }
+
+// RestoreTrash puts items of the Recycle Bin back where they were, and
+// returns where each now is: under another name, as "name (2)", where
+// something took its place meanwhile. Nothing is ever replaced.
+func RestoreTrash(paths []string) ([]string, error) { return restoreTrash(paths) }
+
+// DeleteTrash deletes items of the Recycle Bin for good.
+func DeleteTrash(paths []string) error { return deleteTrash(paths) }
+
+// EmptyTrash deletes all the Recycle Bin holds for good, asking nothing
+// and with no sound: the caller asks.
+func EmptyTrash(owner Window) error { return emptyTrash(owner) }
+
 // OpenInSystem hands a place to the system's own file manager: one that
 // is no directory, as the Recycle Bin, which this program cannot show.
 func OpenInSystem(place string) error { return openInSystem(place) }

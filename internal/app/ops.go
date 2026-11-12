@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/fsys"
 	"myfiles/internal/shell"
 )
@@ -150,7 +151,7 @@ func (w *Window) arrived(dir string, names []string, rename string) {
 // the system's file manager does: they paste in it, and its paste here.
 func (w *Window) copyChosen(t *Tab, cut bool) {
 	paths := t.chosenPaths()
-	if len(paths) == 0 || t.Path == fsys.Computer {
+	if len(paths) == 0 || !real(t.Path) {
 		return
 	}
 	a := w.app
@@ -204,7 +205,7 @@ func (w *Window) canPaste() bool {
 // paste puts the clipboard's files into a directory: moved when they
 // were cut, here or in the system's file manager, else copied.
 func (w *Window) paste(dir string) {
-	if dir == "" || dir == fsys.Computer {
+	if !real(dir) {
 		return
 	}
 	data, err := w.app.desk.read(transfer.FileList, shell.CutFormat)
@@ -257,6 +258,11 @@ func (w *Window) copyPaths(t *Tab) {
 // deleteChosen moves what is chosen to the trash, or with permanent
 // deletes it for good, which it asks about first.
 func (w *Window) deleteChosen(t *Tab, permanent bool) {
+	if t.bin() {
+		// Deleting there is for good, whichever key asked.
+		w.deleteTrashChosen(t)
+		return
+	}
 	paths := t.chosenPaths()
 	if len(paths) == 0 || t.Path == fsys.Computer {
 		return
@@ -265,20 +271,24 @@ func (w *Window) deleteChosen(t *Tab, permanent bool) {
 	run := func() {
 		go func() {
 			w.report(shell.Delete(owner, paths, permanent))
-			w.update(func() { w.app.left(paths) })
+			w.update(func() {
+				w.app.left(paths)
+				// The tabs showing the Recycle Bin show what went there.
+				w.app.refreshTrash()
+			})
 		}()
 	}
 	what := "“" + fsys.Base(paths[0]) + "”"
 	if len(paths) > 1 {
-		what = plural(len(paths), "item")
+		what = locales.Items(len(paths))
 	}
 	switch {
 	case permanent:
-		w.ask = &question{open: true, title: "Delete " + what + " permanently?",
-			message: "This can't be undone.", confirm: "Delete", yes: run}
+		w.ask = &question{open: true, title: locales.DeleteForeverTitle(what),
+			message: locales.DeleteForeverMessage(), confirm: locales.MenuDelete(), yes: run}
 	case w.app.set.ConfirmTrash:
-		w.ask = &question{open: true, title: "Move " + what + " to the Recycle Bin?",
-			confirm: "Move", yes: run}
+		w.ask = &question{open: true, title: locales.TrashTitle(what),
+			confirm: locales.TrashConfirm(), yes: run}
 	default:
 		run()
 	}
@@ -299,17 +309,17 @@ func (w *Window) renameTo(t *Tab, e *fsys.Entry, name string) {
 // newFolder makes a directory in the folder shown and starts renaming
 // it, as the system's file manager does.
 func (w *Window) newFolder(t *Tab) {
-	w.create(t, func(dir string) (string, error) { return shell.NewFolder(dir, "New folder") })
+	w.create(t, func(dir string) (string, error) { return shell.NewFolder(dir, locales.NewFolderName()) })
 }
 
 // newFile makes an empty text file in the folder shown, to be renamed.
 func (w *Window) newFile(t *Tab) {
-	w.create(t, func(dir string) (string, error) { return shell.NewFile(dir, "New Text Document.txt") })
+	w.create(t, func(dir string) (string, error) { return shell.NewFile(dir, locales.NewTextFileName()) })
 }
 
 func (w *Window) create(t *Tab, make func(dir string) (string, error)) {
 	dir := t.Path
-	if dir == "" || dir == fsys.Computer {
+	if !real(dir) {
 		return
 	}
 	go func() {
@@ -336,7 +346,7 @@ func (w *Window) properties(t *Tab) {
 }
 
 func (w *Window) folderProperties(t *Tab) {
-	if t.Path == "" || t.Path == fsys.Computer {
+	if !real(t.Path) {
 		return
 	}
 	owner, path := w.handle(), t.Path
@@ -420,7 +430,7 @@ func (w *Window) appsFor(path string) (*typeApps, bool) {
 // what is chosen or for the folder itself: what other programs added to
 // it is there.
 func (w *Window) systemMenu(t *Tab, background bool) {
-	if t.Path == "" || t.Path == fsys.Computer && background {
+	if t.Path == "" || t.Path == fsys.Computer && background || t.bin() {
 		return
 	}
 	paths := t.chosenPaths()
@@ -448,7 +458,7 @@ func (w *Window) systemMenu(t *Tab, background bool) {
 
 // reload reads the folder shown again, and the icons of its entries.
 func (w *Window) reload(t *Tab) {
-	if t.Path != "" && t.Path != fsys.Computer {
+	if real(t.Path) {
 		w.app.icons.forget(t.Path)
 	}
 	w.refresh(t)

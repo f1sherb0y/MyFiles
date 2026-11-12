@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/fsys"
 	"myfiles/internal/workspace"
 )
@@ -55,7 +56,7 @@ func (w *Window) strip(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBa
 			ui.Box(c.Key("end")).Width(2).Height(stripHeight - 10).MarginY(3).Background(th.Accent).Radius(1)
 		}
 		ui.Row(c.Key("new")).Height(stripHeight-4).Padding(0, 3).Children(func() {
-			if iconButton(c, "tab", icoPlus, "New tab (Ctrl+T)").Clicked() {
+			if iconButton(c, "tab", icoPlus, locales.TabNewTip()).Clicked() {
 				path := fsys.Home()
 				if cur := w.activeTab(p); cur != nil && cur.Path != "" {
 					path = cur.Path
@@ -67,11 +68,11 @@ func (w *Window) strip(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBa
 		ui.Spacer(c)
 		if corner {
 			ui.Row(c.Key("window")).Height(stripHeight-4).Padding(0, 6).Gap(2).Children(func() {
-				if iconButton(c, "sidebar", icoSidebar, "Sidebar (Ctrl+B)").Clicked() {
+				if iconButton(c, "sidebar", icoSidebar, locales.SidebarTip()).Clicked() {
 					a.set.Sidebar = !a.set.Sidebar
 					a.saveSoon()
 				}
-				if iconButton(c, "settings", icoSettings, "Settings (Ctrl+,)").Clicked() {
+				if iconButton(c, "settings", icoSettings, locales.SettingsTip()).Clicked() {
 					w.openSettings()
 				}
 			})
@@ -145,7 +146,7 @@ func (w *Window) tab(c *ui.Context, p *workspace.Pane, t *Tab, index int, active
 
 	// Files held over a tab show its folder, to be dropped in a folder
 	// of it; let go on the tab, they go into its folder.
-	if t.Path != "" && t.Path != fsys.Computer {
+	if real(t.Path) {
 		if w.takeFiles(tab, t.Path) {
 			tab.Background(th.Accent.Alpha(0.22))
 			switch {
@@ -174,7 +175,7 @@ func (w *Window) tab(c *ui.Context, p *workspace.Pane, t *Tab, index int, active
 			ui.Image(c, icon).Size(iconSize, iconSize).Shrink(0)
 		}
 		ui.Text(c, t.title()).SingleLine().Grow(1).MinWidth(0)
-		x := ui.ButtonBase(c.Key("close")).Size(18, 18).Shrink(0).Radius(4).Center().Label("Close tab").TabStop(false)
+		x := ui.ButtonBase(c.Key("close")).Size(18, 18).Shrink(0).Radius(4).Center().Label(locales.TabClose()).TabStop(false)
 		x.Draw(func(pt *ui.Painter, r ui.Rect) {
 			if x.Hovered() {
 				pt.Fill(r, th.SurfacePressed, 4)
@@ -190,10 +191,10 @@ func (w *Window) tab(c *ui.Context, p *workspace.Pane, t *Tab, index int, active
 // tip is what resting the pointer on a tab shows: where it is.
 func (t *Tab) tip() string {
 	if t.settings {
-		return "Settings"
+		return locales.Settings()
 	}
-	if t.Path == fsys.Computer {
-		return "This PC"
+	if !real(t.Path) {
+		return t.title()
 	}
 	return t.Path
 }
@@ -201,35 +202,35 @@ func (t *Tab) tip() string {
 // tabMenu is the context menu of a tab's header.
 func (w *Window) tabMenu(m *ui.Menu, p *workspace.Pane, t *Tab) {
 	id, pane, path := t.ID, p.ID, t.Path
-	if m.Item("New Tab").Shortcut(ui.Cmd, ui.KeyT).Chosen() {
+	if m.Item(locales.TabNew()).Shortcut(ui.Cmd, ui.KeyT).Chosen() {
 		w.defer_(func() { w.newTab(pane, path, "") })
 	}
-	if m.Item("Duplicate Tab").Disabled(t.settings).Chosen() {
+	if m.Item(locales.TabDuplicate()).Disabled(t.settings).Chosen() {
 		w.defer_(func() { w.newTab(pane, path, "") })
 	}
 	m.Separator()
 	alone := len(p.Tabs) < 2
-	if m.Item("Split Right").Disabled(alone).Shortcut(ui.Cmd, ui.KeyBackslash).Chosen() {
+	if m.Item(locales.TabSplitRight()).Disabled(alone).Shortcut(ui.Cmd, ui.KeyBackslash).Chosen() {
 		w.defer_(func() { w.layout.Split(pane, id, workspace.ZoneRight); w.changed() })
 	}
-	if m.Item("Split Down").Disabled(alone).Shortcut(ui.Cmd|ui.Shift, ui.KeyBackslash).Chosen() {
+	if m.Item(locales.TabSplitDown()).Disabled(alone).Shortcut(ui.Cmd|ui.Shift, ui.KeyBackslash).Chosen() {
 		w.defer_(func() { w.layout.Split(pane, id, workspace.ZoneBottom); w.changed() })
 	}
-	if m.Item("Split Left").Disabled(alone).Chosen() {
+	if m.Item(locales.TabSplitLeft()).Disabled(alone).Chosen() {
 		w.defer_(func() { w.layout.Split(pane, id, workspace.ZoneLeft); w.changed() })
 	}
-	if m.Item("Split Up").Disabled(alone).Chosen() {
+	if m.Item(locales.TabSplitUp()).Disabled(alone).Chosen() {
 		w.defer_(func() { w.layout.Split(pane, id, workspace.ZoneTop); w.changed() })
 	}
 	m.Separator()
-	if m.Item("Copy Path").Disabled(path == "").Chosen() {
+	if m.Item(locales.MenuCopyPath()).Disabled(path == "").Chosen() {
 		w.copyText(path)
 	}
 	m.Separator()
-	if m.Item("Close Tab").Shortcut(ui.Cmd, ui.KeyW).Chosen() {
+	if m.Item(locales.TabCloseThis()).Shortcut(ui.Cmd, ui.KeyW).Chosen() {
 		w.defer_(func() { w.closeTab(id) })
 	}
-	if m.Item("Close Other Tabs").Disabled(alone).Chosen() {
+	if m.Item(locales.TabCloseOthers()).Disabled(alone).Chosen() {
 		w.defer_(func() {
 			if p := w.layout.Pane(pane); p != nil {
 				for _, other := range append([]workspace.TabID(nil), p.Tabs...) {

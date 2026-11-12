@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
 )
 
 func TestParse(t *testing.T) {
@@ -40,8 +41,10 @@ func TestParse(t *testing.T) {
 		{"shell folder", []string{`shell:Downloads`}, Command{Targets: []Target{{Path: downloads}}}},
 		{"shell folder sub", []string{`shell:Profile\x`}, Command{Targets: []Target{{Path: home + `\x`}}}},
 		{"env", []string{`%USERPROFILE%\x`}, Command{Targets: []Target{{Path: home + `\x`}}}},
-		{"recycle bin", []string{`::{645FF040-5081-101B-9F08-00AA002F954E}`}, Command{Delegate: []string{`::{645FF040-5081-101B-9F08-00AA002F954E}`}}},
-		{"shell virtual", []string{`shell:RecycleBinFolder`}, Command{Delegate: []string{`shell:RecycleBinFolder`}}},
+		{"control panel", []string{`::{26EE0668-A00A-44D7-9371-BEB064C98683}`}, Command{Delegate: []string{`::{26EE0668-A00A-44D7-9371-BEB064C98683}`}}},
+		{"shell recycle bin", []string{`shell:RecycleBinFolder`}, Command{Targets: []Target{{Path: shell.RecycleBin}}}},
+		{"recycle bin by class", []string{`::{645ff040-5081-101b-9f08-00aa002f954e}`}, Command{Targets: []Target{{Path: shell.RecycleBin}}}},
+		{"shell virtual", []string{`shell:ControlPanelFolder`}, Command{Delegate: []string{`shell:ControlPanelFolder`}}},
 		{"embedding", []string{`/factory,{75dff2b7-6936-4c06-a8bb-676a7b00b24b}`, `-Embedding`}, Command{}},
 		{"unc", []string{`\\srv\share\dir`}, Command{Targets: []Target{{Path: `\\srv\share\dir`}}}},
 	} {

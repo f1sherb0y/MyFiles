@@ -3,5 +3,10 @@
   "identifier": "dev.myfiles.filemanager",
   "version": "0.1.0",
   "icon": "../../internal/app/icon.png",
-  "out": "../../bin/dist"
+  "out": "../../bin/dist",
+  "i18n": { "dir": "locales", "source": "en" },
+  "updates": {
+    "publicKey": "lxkfHeY8MA3jcvpuZdAl/Bpkq2rSnjuJTaywIl5vXXw=",
+    "github": "f1sherb0y/MyFiles"
+  }
 }

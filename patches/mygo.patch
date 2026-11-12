@@ -186,6 +186,18 @@ index 9183c29..49e4d13 100644
  	}
  	rt.requestFrame()
  	return true
+diff --git a/ui/element.go b/ui/element.go
+index d4164ec..b953b78 100644
+--- a/ui/element.go
++++ b/ui/element.go
+@@ -2189,6 +2189,7 @@ func (e *node) Bounds() Rect {
+ 		return Rect{}
+ 	}
+ 	s := e.st
++	e.c.rt.readSize(e)
+ 	return transformRect(s.world, Rect{s.x, s.y, s.w, s.h})
+ }
+ 
 diff --git a/ui/gridview.go b/ui/gridview.go
 index f4444dc..dfaffbe 100644
 --- a/ui/gridview.go
@@ -342,7 +354,7 @@ index d8f63b6..c54c5d5 100644
  	sel := 13
  	s := GridState{Selected: &sel}
 diff --git a/ui/list.go b/ui/list.go
-index 31b5903..d78c8fe 100644
+index 31b5903..27851b9 100644
 --- a/ui/list.go
 +++ b/ui/list.go
 @@ -6,6 +6,8 @@ import (
@@ -400,6 +412,18 @@ index 31b5903..d78c8fe 100644
  // key returns the key of row i, its index without ListState.Key.
  // rowDrag is rows of a list being dragged to another place in it
  // (ListState.Reorder).
+@@ -1444,8 +1471,9 @@ func (e *node) layoutList(w, h float32) {
+ 		cw = max(cw, e.rowMinW)
+ 	}
+ 	if g := e.gridFit; g != nil && max(1, int(math.Floor(float64((cw+g.gap)/(g.minW+g.gap))))) != g.cols {
+-		// The items of a grid take other columns: the next frame builds
+-		// them so.
++		// The items of a grid take other columns: the view builds them so
++		// before the frame is drawn (sizesStale), or the next frame does.
++		e.c.rt.sizeStale = true
+ 		e.c.rt.animating = true
+ 	}
+ 	if cw != s.width {
 diff --git a/ui/prewarm.go b/ui/prewarm.go
 new file mode 100644
 index 0000000..988a1ac
@@ -437,20 +461,182 @@ index 0000000..f93703d
 +
 +func prewarm() { go d3d11.Prewarm() }
 diff --git a/ui/runtime.go b/ui/runtime.go
-index d557a93..178d629 100644
+index d557a93..004bfdf 100644
 --- a/ui/runtime.go
 +++ b/ui/runtime.go
-@@ -542,6 +542,9 @@ type engine struct {
+@@ -542,6 +542,15 @@ type engine struct {
  	live liveState
  	// stats measures frames for MYGO_FRAME_STATS, nil when it is unset.
  	stats *frameStats
++	// sizeReads are the sizes the view read of elements as it built, while
++	// sizeReading is set; sizeStale tells that a widget built for a size
++	// the layout did not give it (sizesStale).
++	sizeReads   []sizeRead
++	sizeReading bool
++	sizeStale   bool
 +	// presented are the functions to run once the frame is presented
 +	// (Context.OnPresented).
 +	presented []func()
  	// dropOver is the element files are dragged over; access is true once
  	// assistive technology asked for the content, and accessNodes is how
  	// many nodes the last frame's tree had.
-@@ -879,6 +882,13 @@ func (rt *engine) runFrame() {
+@@ -741,60 +750,72 @@ func (rt *engine) runFrame() {
+ 	focused := rt.focused
+ 	// An event handled while building (a click, an edit) may change what
+ 	// was built before it: build again, so the frame shows the outcome.
+-	for pass := 0; pass < 3; pass++ {
+-		rt.pass = pass
+-		rt.consumed = false
+-		if rt.zoomChanged {
+-			// The view zoomed the content: this pass builds it at its new
+-			// size.
+-			rt.zoomChanged = false
+-			w, h, scale = rt.size()
+-			appW = rt.insp.contentWidth(w)
+-			rt.c.titleBar = rt.titleBar()
+-			rt.painted = [3]float32{w, h, scale}
+-		}
+-		rt.nextRegs = rt.nextRegs[:0]
+-		clear(rt.kept)
+-		rt.c.reset(now, appW, h)
+-		rt.view(&rt.c)
+-		if rt.closing {
+-			// The view closed the window, as a close button does: the
+-			// window is gone at once, and the frame ends with the view.
+-			return
+-		}
+-		rt.buildToasts(&rt.c)
+-		if d := rt.menu.drawn; d != nil && d.edit && rt.drawsMenus() {
+-			menusInWindow.drawEditMenu(rt)
+-		}
+-		if rt.overlayExits {
+-			// Copies of the elements gone from the layer leave in it
+-			// (animateExits), empty as it is otherwise: it lets the
+-			// pointer through, and holds nothing to focus.
+-			rt.c.overlayRoot()
+-		}
+-		if ov := rt.c.overlay; ov != nil {
+-			rt.c.root.add(ov)
+-		}
+-		if rt.insp.open {
+-			rt.buildInspector(&rt.c, appW, w, h)
+-		}
+-		rt.applyAllInputs()
+-		rt.runAfterBuild()
+-		rt.finishInputs()
+-		// Commit derived values while callbacks still hold this pass's
+-		// bindings. Delivered callbacks do not repeat in the next pass.
+-		rt.runNoticeActions()
+-		rt.applyFocusRequests()
+-		rt.runActions()
+-		rt.prepareSelectable(rt.c.root)
+-		rt.resolveMenu()
+-		rt.endPass()
+-		if rt.closing {
+-			return // an action closed it
+-		}
+-		if !rt.consumed && !rt.zoomChanged && !rt.unhoverGone() {
+-			break
++	// buildPasses builds the view, in passes numbered from one given, and
++	// tells whether the window closed meanwhile.
++	buildPasses := func(from int) (closed bool) {
++		for pass := from; pass < from+3; pass++ {
++			rt.pass = pass
++			rt.consumed = false
++			// What the pass before read of sizes was of elements that are gone.
++			rt.sizeReads = rt.sizeReads[:0]
++			if rt.zoomChanged {
++				// The view zoomed the content: this pass builds it at its new
++				// size.
++				rt.zoomChanged = false
++				w, h, scale = rt.size()
++				appW = rt.insp.contentWidth(w)
++				rt.c.titleBar = rt.titleBar()
++				rt.painted = [3]float32{w, h, scale}
++			}
++			rt.nextRegs = rt.nextRegs[:0]
++			clear(rt.kept)
++			rt.c.reset(now, appW, h)
++			rt.sizeReading = true
++			rt.view(&rt.c)
++			rt.sizeReading = false
++			if rt.closing {
++				// The view closed the window, as a close button does: the
++				// window is gone at once, and the frame ends with the view.
++				return true
++			}
++			rt.buildToasts(&rt.c)
++			if d := rt.menu.drawn; d != nil && d.edit && rt.drawsMenus() {
++				menusInWindow.drawEditMenu(rt)
++			}
++			if rt.overlayExits {
++				// Copies of the elements gone from the layer leave in it
++				// (animateExits), empty as it is otherwise: it lets the
++				// pointer through, and holds nothing to focus.
++				rt.c.overlayRoot()
++			}
++			if ov := rt.c.overlay; ov != nil {
++				rt.c.root.add(ov)
++			}
++			if rt.insp.open {
++				rt.buildInspector(&rt.c, appW, w, h)
++			}
++			rt.applyAllInputs()
++			rt.runAfterBuild()
++			rt.finishInputs()
++			// Commit derived values while callbacks still hold this pass's
++			// bindings. Delivered callbacks do not repeat in the next pass.
++			rt.runNoticeActions()
++			rt.applyFocusRequests()
++			rt.runActions()
++			rt.prepareSelectable(rt.c.root)
++			rt.resolveMenu()
++			rt.endPass()
++			if rt.closing {
++				return true // an action closed it
++			}
++			if !rt.consumed && !rt.zoomChanged && !rt.unhoverGone() {
++				break
++			}
+ 		}
++		return false
++	}
++	if buildPasses(0) {
++		return
+ 	}
+ 	if rt.zoomChanged {
+ 		// Zoomed in the last pass: laid out at the new size, and built
+@@ -825,6 +846,29 @@ func (rt *engine) runFrame() {
+ 	rt.insp.lap(0)
+ 	layoutTree(root, appW, h)
+ 	rt.measureFit(root)
++	// The view builds with the sizes of the frame before, where it needs
++	// some: how many columns fit, what to leave out for want of room. When
++	// the layout gave those elements other sizes, as when a pane splits or
++	// the window is resized, what was built is of the old ones: the view
++	// builds again, with the new, before anything is drawn, rather than
++	// show a frame it puts right in the next.
++	for try := 0; try < 2 && rt.sizesStale(root); try++ {
++		rt.journal.reset()
++		if buildPasses(rt.pass + 1) {
++			return
++		}
++		root = rt.c.root
++		rt.journal.start()
++		if rt.insp.open {
++			rt.insp.applyEdits(root)
++		}
++		layoutTree(root, appW, h)
++		rt.measureFit(root)
++	}
++	rt.sizeReads, rt.sizeStale = rt.sizeReads[:0], false
++	if rt.stats != nil {
++		rt.stats.passes = rt.pass + 1
++	}
+ 	if checkBuilt != nil {
+ 		checkBuilt(rt, builtLaidOut)
+ 	}
+@@ -879,6 +923,13 @@ func (rt *engine) runFrame() {
  		rt.host.setMaximizeButton(r)
  	}
  	rt.stats.lap(phasePresent)
@@ -464,6 +650,56 @@ index d557a93..178d629 100644
  	rt.prune()
  	rt.syncDropFormats()
  	rt.prunePictures()
+@@ -922,6 +973,49 @@ func (rt *engine) runFrame() {
+ 	rt.stats.end(rt)
+ }
+ 
++// sizeRead is the size the view read of an element as it built: that of
++// the frame before.
++type sizeRead struct {
++	e    *node
++	w, h float32
++}
++
++// readSize notes that the view reads the size an element had in the
++// frame before, to build with.
++func (rt *engine) readSize(e *node) {
++	if rt.sizeReading && e.st != nil {
++		rt.sizeReads = append(rt.sizeReads, sizeRead{e, e.st.w, e.st.h})
++	}
++}
++
++// sizesStale tells whether the layout gave another size to an element
++// whose size the view built with, or a widget found what it built to be
++// of another size (sizeStale). The elements take their new sizes, for the
++// view to read as it builds again.
++func (rt *engine) sizesStale(root *node) bool {
++	stale := rt.sizeStale
++	rt.sizeStale = false
++	for _, r := range rt.sizeReads {
++		e := r.e
++		s := e.st
++		if s == nil || e.w == 0 && e.h == 0 {
++			continue // not laid out: no size to have read
++		}
++		if d := e.w - r.w; d > 0.5 || d < -0.5 {
++			stale = true
++		} else if d := e.h - r.h; d > 0.5 || d < -0.5 {
++			stale = true
++		} else {
++			continue
++		}
++		s.x, s.y, s.w, s.h = e.x, e.y, e.w, e.h
++		s.cx, s.cy = e.x+e.contentX(), e.y+e.contentY()
++		s.cw, s.ch = max(e.w-e.padX(), 0), max(e.h-e.padY(), 0)
++	}
++	rt.sizeReads = rt.sizeReads[:0]
++	return stale
++}
++
+ // now returns the time, which a Tester sets (clock).
+ func (rt *engine) now() time.Time {
+ 	if rt.clock != nil {
 diff --git a/ui/table.go b/ui/table.go
 index f83633c..1b4f62a 100644
 --- a/ui/table.go
@@ -541,3 +777,15 @@ index 0000000..0d3c4d3
 +func (t *Tester) WheelWith(mods Modifiers, x, y, dx, dy float32) {
 +	t.send(platform.SurfaceEvent{Kind: platform.PointerScroll, X: float64(x), Y: float64(y), DX: float64(dx), DY: float64(dy), Mods: platform.Modifiers(mods)})
 +}
+diff --git a/ui/transform.go b/ui/transform.go
+index af7792b..c44577d 100644
+--- a/ui/transform.go
++++ b/ui/transform.go
+@@ -360,6 +360,7 @@ func (e *node) LayoutBounds() Rect {
+ 		return Rect{}
+ 	}
+ 	s := e.st
++	e.c.rt.readSize(e)
+ 	return Rect{s.x, s.y, s.w, s.h}
+ }
+ 

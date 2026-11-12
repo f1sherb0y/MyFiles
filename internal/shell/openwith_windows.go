@@ -113,7 +113,7 @@ func handlerIcon(h *object, id string) *image.RGBA {
 			if img := pictureIcon(indirectString(where)); img != nil {
 				return img
 			}
-		} else if img := extractIcon(where, index); img != nil {
+		} else if img := extractIcon(where, index, appIconSize); img != nil {
 			return img
 		}
 	}
@@ -159,13 +159,13 @@ func pictureIcon(path string) *image.RGBA {
 }
 
 // extractIcon is the icon at an index of a file of icons.
-func extractIcon(path string, index int32) *image.RGBA {
+func extractIcon(path string, index int32, px int) *image.RGBA {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return nil
 	}
 	var hicon uintptr
-	hr, _, _ := procSHDefExtractIconW.Call(uintptr(unsafe.Pointer(p)), uintptr(index), 0, uintptr(unsafe.Pointer(&hicon)), 0, appIconSize)
+	hr, _, _ := procSHDefExtractIconW.Call(uintptr(unsafe.Pointer(p)), uintptr(index), 0, uintptr(unsafe.Pointer(&hicon)), 0, uintptr(px))
 	if hresult(hr) != 0 || hicon == 0 {
 		return nil
 	}

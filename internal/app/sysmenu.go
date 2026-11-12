@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/fsys"
 	"myfiles/internal/shell"
 )
@@ -30,7 +31,7 @@ type sysItem struct {
 }
 
 // sysMenu is the system's menu of what a context menu is for, as the
-// "More" submenu shows it. The system takes a tenth of a second to build
+// locales.MenuMore() submenu shows it. The system takes a tenth of a second to build
 // one, and a second the first time: it is built on another thread while
 // the menu already shows, and its items come when they come.
 type sysMenu struct {
@@ -66,26 +67,26 @@ var ownVerbs = map[string]bool{
 	"rename": true, "properties": true, "refresh": true,
 }
 
-// more adds the "More" submenu: what the system and other programs have
+// more adds the locales.MenuMore() submenu: what the system and other programs have
 // for the entries chosen, or for the folder, read from the system's menu
 // and drawn here; and the system's menu itself, for what cannot be.
 func (w *Window) more(m *ui.Menu, t *Tab, background bool) {
-	if t.Path == "" || t.Path == fsys.Computer && background {
+	if t.Path == "" || t.Path == fsys.Computer && background || t.bin() {
 		return
 	}
 	// Asked for as the menu opens: there by the time the submenu is.
 	sm := w.systemMenuOf(t, background)
-	m.Submenu("More", func(m *ui.Menu) {
+	m.Submenu(locales.MenuMore(), func(m *ui.Menu) {
 		switch {
 		case sm.err != nil:
-			m.Item("The system's menu could not be read").Disabled(true)
+			m.Item(locales.MenuMoreFailed()).Disabled(true)
 		case !sm.loaded:
-			m.Item("Loading…").Disabled(true)
+			m.Item(locales.MenuLoading()).Disabled(true)
 		default:
 			w.sysItems(m, sm, sm.items)
 		}
 		m.Separator()
-		if m.Item("System Menu…").Chosen() {
+		if m.Item(locales.MenuSystem()).Chosen() {
 			w.systemMenu(t, background)
 		}
 	})
@@ -104,7 +105,7 @@ func (w *Window) sysItems(m *ui.Menu, sm *sysMenu, items []sysItem) {
 				if items, ok := w.sysSub(sm, sub); ok {
 					w.sysItems(m, sm, items)
 				} else {
-					m.Item("Loading…").Disabled(true)
+					m.Item(locales.MenuLoading()).Disabled(true)
 				}
 			})
 			if it.icon != nil {

@@ -3,8 +3,11 @@ package app
 import (
 	"time"
 
+	"github.com/egoist/mygo/i18n"
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
+	"myfiles/internal/config"
 	"myfiles/internal/shell"
 )
 
@@ -24,6 +27,10 @@ func (a *App) saveSoon() {
 			a.saving = false
 			a.saveMu.Unlock()
 			_ = a.set.Save()
+			if a.side.recentDirty {
+				a.side.recentDirty = false
+				_ = config.SaveRecent(a.side.recents())
+			}
 			for _, w := range a.windows {
 				w.save()
 			}
@@ -63,6 +70,16 @@ func (w *Window) openSettings() {
 		w.layout.AddTab(p.ID, t.ID, at)
 		w.changed()
 	}
+	w.readSettings()
+}
+
+// readSettings reads what the settings show that is kept elsewhere: the
+// language chosen, and what the system has the program registered for,
+// off the main thread.
+func (w *Window) readSettings() {
+	a := w.app
+	a.settingsRead = true
+	a.lang, a.langs = a.desk.chosenLocale(), a.desk.languages()
 	go func() {
 		d := shell.DefaultFileManager(a.exe)
 		w.update(func() { a.registered = d })
@@ -90,7 +107,7 @@ func (w *Window) register(d shell.Default) {
 // something that cannot be undone.
 func (w *Window) dialogs(c *ui.Context) {
 	if q := w.ask; q != nil {
-		switch ui.AlertDialog(c, &q.open, q.title, q.message, "Cancel", q.confirm) {
+		switch ui.AlertDialog(c, &q.open, q.title, q.message, locales.Cancel(), q.confirm) {
 		case 1:
 			q.yes()
 		}
@@ -110,26 +127,30 @@ func (w *Window) settingsPage(c *ui.Context) {
 	th := c.Theme()
 	set := &a.set
 	changed := false
+	if !a.settingsRead {
+		// A settings tab the session brought back.
+		w.readSettings()
+	}
 	ui.Scroll(c.Key("settings")).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).MaxWidth(560).Gap(10).Padding(20, 24).Children(func() {
-			ui.Text(c, "Settings").FontSize(th.FontSize + 5).FontWeight(600)
+			ui.Text(c, locales.Settings()).FontSize(th.FontSize + 5).FontWeight(600)
 
-			section(c, "Default file manager")
+			section(c, locales.SettingsDefault())
 			reg := a.registered
-			if ui.Checkbox(c, &reg.Folders, "Open folders with MyFiles").Changed() {
+			if ui.Checkbox(c, &reg.Folders, locales.SettingsOpenFolders()).Changed() {
 				w.register(reg)
 			}
-			hint(c, "Folders opened from the desktop and from other programs open here instead of in File Explorer. Programs that ask File Explorer itself to show a file still get File Explorer.")
-			if ui.Checkbox(c, &reg.Shortcut, "Open MyFiles with Win+E").Changed() {
+			hint(c, locales.SettingsOpenFoldersHint())
+			if ui.Checkbox(c, &reg.Shortcut, locales.SettingsWinE()).Changed() {
 				w.register(reg)
 			}
-			hint(c, "Both are settings of your user account alone, and turning them off puts back what was there.")
+			hint(c, locales.SettingsDefaultHint())
 
-			section(c, "Files")
-			if ui.Checkbox(c, &set.ShowHidden, "Show hidden files").Changed() {
+			section(c, locales.SettingsFiles())
+			if ui.Checkbox(c, &set.ShowHidden, locales.SettingsShowHidden()).Changed() {
 				w.setHidden(set.ShowHidden)
 			}
-			if ui.Checkbox(c, &set.DirsFirst, "List folders before files").Changed() {
+			if ui.Checkbox(c, &set.DirsFirst, locales.SettingsDirsFirst()).Changed() {
 				changed = true
 				for _, win := range a.windows {
 					for _, t := range win.tabs {
@@ -139,11 +160,38 @@ func (w *Window) settingsPage(c *ui.Context) {
 					}
 				}
 			}
-			changed = ui.Checkbox(c, &set.ConfirmTrash, "Ask before moving files to the Recycle Bin").Changed() || changed
-			changed = ui.Checkbox(c, &set.RestoreTabs, "Reopen the last session's tabs at startup").Changed() || changed
+			changed = ui.Checkbox(c, &set.ConfirmTrash, locales.SettingsConfirmTrash()).Changed() || changed
+			changed = ui.Checkbox(c, &set.RestoreTabs, locales.SettingsRestoreTabs()).Changed() || changed
 
-			section(c, "Appearance")
-			option(c, "Theme", func() {
+			section(c, locales.SettingsUpdates())
+			if ui.Checkbox(c, &set.AutoUpdate, locales.SettingsAutoUpdate()).Changed() {
+				changed = true
+				if set.AutoUpdate {
+					a.checkUpdate()
+				}
+			}
+			hint(c, locales.SettingsVersion(Version))
+
+			section(c, locales.SettingsAppearance())
+			option(c, locales.SettingsLanguage(), func() {
+				// The system's, then each language named in itself.
+				labels, at := []string{locales.SettingsSystem()}, 0
+				for i, tag := range a.langs {
+					labels = append(labels, i18n.Autonym(tag))
+					if tag == a.lang {
+						at = i + 1
+					}
+				}
+				if ui.Segmented(c, &at, labels...).Changed() {
+					a.lang = ""
+					if at > 0 {
+						a.lang = a.langs[at-1]
+					}
+					a.desk.setLocale(a.lang)
+					a.invalidate()
+				}
+			})
+			option(c, locales.SettingsTheme(), func() {
 				themes := []string{"system", "light", "dark"}
 				at := 0
 				for i, name := range themes {
@@ -151,13 +199,13 @@ func (w *Window) settingsPage(c *ui.Context) {
 						at = i
 					}
 				}
-				if ui.Segmented(c, &at, "System", "Light", "Dark").Changed() {
+				if ui.Segmented(c, &at, locales.SettingsSystem(), locales.SettingsLight(), locales.SettingsDark()).Changed() {
 					set.Theme = themes[at]
 					changed = true
 					a.desk.appearance(set.Theme)
 				}
 			})
-			option(c, "Rows", func() {
+			option(c, locales.SettingsRows(), func() {
 				heights := []float32{20, 22, 26, 30}
 				at := 1
 				for i, h := range heights {
@@ -165,12 +213,12 @@ func (w *Window) settingsPage(c *ui.Context) {
 						at = i
 					}
 				}
-				if ui.Segmented(c, &at, "Tight", "Compact", "Regular", "Roomy").Changed() {
+				if ui.Segmented(c, &at, locales.SettingsRowsTight(), locales.SettingsRowsCompact(), locales.SettingsRowsRegular(), locales.SettingsRowsRoomy()).Changed() {
 					set.RowHeight = heights[at]
 					changed = true
 				}
 			})
-			option(c, "Text size", func() {
+			option(c, locales.SettingsTextSize(), func() {
 				sizes := []float32{11, 12, 13, 14}
 				at := 1
 				for i, s := range sizes {

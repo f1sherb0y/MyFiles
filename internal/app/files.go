@@ -3,10 +3,12 @@ package app
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/clock"
 	"myfiles/internal/fsys"
 	"myfiles/internal/workspace"
@@ -16,16 +18,19 @@ import (
 // their places and widths under other titles.
 var (
 	fileColumns = []ui.TableColumn{
-		{ID: colName, Title: "Name", MinWidth: 120, Sortable: true},
-		{ID: colModified, Title: "Date modified", Width: 128, MinWidth: 60, Sortable: true},
-		{ID: colType, Title: "Type", Width: 132, MinWidth: 50, Sortable: true},
-		{ID: colSize, Title: "Size", Width: 82, MinWidth: 50, Align: ui.End, Sortable: true},
+		{ID: colName, MinWidth: 120, Sortable: true},
+		{ID: colModified, Width: 128, MinWidth: 60, Sortable: true},
+		{ID: colType, Width: 132, MinWidth: 50, Sortable: true},
+		{ID: colSize, Width: 82, MinWidth: 50, Align: ui.End, Sortable: true},
 	}
+	fileTitles   = [...]func() string{locales.ColumnName, locales.ColumnModified, locales.ColumnType, locales.ColumnSize}
+	driveTitles  = [...]func() string{locales.ColumnName, locales.ColumnFree, locales.ColumnFileSystem, locales.ColumnTotal}
+	trashTitles  = [...]func() string{locales.ColumnName, locales.ColumnDeleted, locales.ColumnFrom, locales.ColumnSize}
 	driveColumns = []ui.TableColumn{
-		{ID: colName, Title: "Name", MinWidth: 120},
-		{ID: colModified, Title: "Free space", Width: 128, MinWidth: 60},
-		{ID: colType, Title: "File system", Width: 132, MinWidth: 50},
-		{ID: colSize, Title: "Total size", Width: 82, MinWidth: 50, Align: ui.End},
+		{ID: colName, MinWidth: 120},
+		{ID: colModified, Width: 128, MinWidth: 60},
+		{ID: colType, Width: 132, MinWidth: 50},
+		{ID: colSize, Width: 82, MinWidth: 50, Align: ui.End},
 	}
 )
 
@@ -66,6 +71,7 @@ func (w *Window) files(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 	}
 
 	t.building = 0
+	t.entryBoxes = t.entryBoxes[:0]
 	if t.mode == viewDetails {
 		w.details(c, t, focused)
 	} else {
@@ -73,9 +79,12 @@ func (w *Window) files(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 	}
 	t.span = t.building
 	if len(t.view) == 0 && !t.loading && t.Path != "" {
-		msg := "This folder is empty"
+		msg := locales.FolderEmpty()
+		if t.bin() {
+			msg = locales.TrashEmptyState()
+		}
 		if t.filter != "" {
-			msg = "Nothing matches the filter"
+			msg = locales.FilterNoMatch()
 		}
 		ui.Text(c, msg).Absolute().Top(48).Left(0).Right(0).TextAlign(ui.Center).
 			TextColor(c.Theme().TextMuted).PassThrough()
@@ -99,16 +108,30 @@ func (w *Window) details(c *ui.Context, t *Tab, focused bool) {
 		if row >= len(t.view) {
 			return ""
 		}
+		if t.bin() {
+			// The name it had, not the one it is kept under.
+			return t.trash[t.view[row]].Name
+		}
 		return t.entry(row).Name
 	}
 	st.Selection = &t.sel
 	st.Selected = &t.cursor
 	st.KeepOffset = true
 	st.Columns = a.columns
-	columns := fileColumns
+	columns := titled(&a.fileCols, fileColumns, fileTitles[:])
 	if drives {
-		columns = driveColumns
+		columns = titled(&a.driveCols, driveColumns, driveTitles[:])
 		st.Sort, st.DragData, st.RowBuilt = nil, nil, nil
+	} else if t.bin() {
+		// What was deleted: sorted and chosen as files are, and dragged
+		// nowhere.
+		columns = titled(&a.trashCols, fileColumns, trashTitles[:])
+		st.Sort, st.DragData = &t.sort, nil
+		st.RowBuilt = func(row ui.Element, i int) {
+			if i < len(t.view) {
+				w.bandEntry(t, row, t.entry(i).Name)
+			}
+		}
 	} else {
 		st.Sort = &t.sort
 		st.DragOptions = transfer.DragOptions{Operations: transfer.Copy | transfer.Move}
@@ -118,7 +141,9 @@ func (w *Window) details(c *ui.Context, t *Tab, focused bool) {
 			if i >= len(t.view) {
 				return
 			}
-			if e := t.entry(i); e.IsDir() && w.takeFiles(row, t.pathOf(e)) {
+			e := t.entry(i)
+			w.bandEntry(t, row, e.Name)
+			if e.IsDir() && w.takeFiles(row, t.pathOf(e)) {
 				row.Background(c.Theme().Accent)
 			}
 		}
@@ -128,7 +153,10 @@ func (w *Window) details(c *ui.Context, t *Tab, focused bool) {
 	ui.Themed(c, &a.themes.table).Grow(1).MinHeight(0).Children(func() {
 		table := ui.Table(c.Key(t.ID), st, columns, len(t.view), func(row, col int) {
 			w.cell(c, t, row, col)
-		}).Grow(1).MinHeight(0).Label("Files")
+		}).Grow(1).MinHeight(0).Label(locales.Files())
+		if !drives {
+			w.bandOn(c, t, table)
+		}
 		a.columns = st.Columns
 		if table.Changed() {
 			t.selStale = true
@@ -138,7 +166,10 @@ func (w *Window) details(c *ui.Context, t *Tab, focused bool) {
 		if table.Submitted() {
 			w.openChosen(t)
 		}
-		if !drives {
+		switch {
+		case t.bin():
+			table.ContextMenu(func(m *ui.Menu) { w.trashFolderMenu(m, t) })
+		case !drives:
 			table.ContextMenu(func(m *ui.Menu) { w.folderMenu(m, t) })
 		}
 		if t.wantFocus && focused && !t.editing {
@@ -189,6 +220,8 @@ func (w *Window) cell(c *ui.Context, t *Tab, row, col int) {
 		switch {
 		case drives:
 			ui.Text(c, t.volumes[i].Title()).SingleLine().Grow(1).MinWidth(0)
+		case t.bin():
+			ui.Text(c, t.trash[i].Name).SingleLine().Grow(1).MinWidth(0)
 		default:
 			name := e.Name
 			text := ui.EditableText(c, &name).Grow(1)
@@ -214,6 +247,10 @@ func (w *Window) cell(c *ui.Context, t *Tab, row, col int) {
 			ui.Text(c, t.volumes[i].FileSystem).SingleLine().TextColor(th.TextMuted)
 			return
 		}
+		if t.bin() {
+			ui.Text(c, t.trash[i].From).SingleLine().TextColor(th.TextMuted)
+			return
+		}
 		ui.Text(c, a.icons.typeName(e)).SingleLine().TextColor(th.TextMuted)
 	case 3:
 		if drives {
@@ -223,6 +260,11 @@ func (w *Window) cell(c *ui.Context, t *Tab, row, col int) {
 			return
 		}
 		tx.make(e)
+		if t.bin() && e.IsDir() && e.Size > 0 {
+			// The Recycle Bin noted how much a folder held.
+			ui.Text(c, formatSize(e.Size)).SingleLine().TextColor(th.TextMuted)
+			return
+		}
 		ui.Text(c, tx.size).SingleLine().TextColor(th.TextMuted)
 	}
 }
@@ -258,6 +300,11 @@ func (w *Window) fileKeys(c *ui.Context, t *Tab, pressed func(mods ui.Modifiers,
 		t.selStale = true
 		w.app.uncut()
 	case drives:
+	case t.bin():
+		// Nothing there is copied, pasted or opened: put back, or deleted.
+		if pressed(0, ui.KeyDelete) || pressed(ui.Shift, ui.KeyDelete) {
+			w.deleteTrashChosen(t)
+		}
 	case pressed(0, ui.KeyDelete):
 		w.deleteChosen(t, false)
 	case pressed(ui.Shift, ui.KeyDelete):
@@ -276,13 +323,17 @@ func (w *Window) fileKeys(c *ui.Context, t *Tab, pressed func(mods ui.Modifiers,
 // openChosen opens what is chosen: one directory in the tab, more of
 // them in tabs of their own, and files with their programs.
 func (w *Window) openChosen(t *Tab) {
+	if t.bin() {
+		// What is deleted opens once it is put back.
+		return
+	}
 	chosen := t.chosen()
 	if len(chosen) == 0 && t.cursor >= 0 && t.cursor < len(t.view) {
 		chosen = []*fsys.Entry{t.entry(t.cursor)}
 	}
 	const most = 16
 	if len(chosen) > most {
-		w.say("Too many items to open at once")
+		w.say(locales.TooManyToOpen())
 		return
 	}
 	dirs := 0
@@ -312,6 +363,10 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 	if row < 0 || row >= len(t.view) {
 		return
 	}
+	if t.bin() {
+		w.trashMenu(m, t)
+		return
+	}
 	e := t.entry(row)
 	path := t.pathOf(e)
 	drives := t.Path == fsys.Computer
@@ -319,24 +374,33 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 	if p := w.layout.PaneOf(t.ID); p != nil {
 		pane = p.ID
 	}
-	if m.Item("Open").Chosen() {
+	if m.Item(locales.MenuOpen()).Chosen() {
 		w.defer_(func() { w.openChosen(t) })
 	}
 	if e.IsDir() {
-		if m.Item("Open in New Tab").Chosen() {
+		if m.Item(locales.MenuOpenNewTab()).Chosen() {
 			w.defer_(func() { w.newTab(pane, path, "") })
 		}
-		if m.Item("Open in Split Pane").Chosen() {
+		if m.Item(locales.MenuOpenSplit()).Chosen() {
 			w.defer_(func() {
 				id := w.newTab(pane, path, "")
 				w.layout.Split(pane, id, workspace.ZoneRight)
 				w.changed()
 			})
 		}
+		if a := w.app; a.pinned(path) {
+			if m.Item(locales.SidebarUnpin()).Chosen() {
+				w.defer_(func() { a.unpin(path) })
+			}
+		} else if !drives {
+			if m.Item(locales.SidebarPin()).Chosen() {
+				w.defer_(func() { a.pin(path) })
+			}
+		}
 	} else {
 		// Asked for as the menu opens: there by the time the submenu is.
 		ta, known := w.appsFor(path)
-		m.Submenu("Open With", func(m *ui.Menu) {
+		m.Submenu(locales.MenuOpenWith(), func(m *ui.Menu) {
 			for i, app := range ta.apps {
 				item := m.Item(app.Name).ID(app.ID)
 				if i < len(ta.icons) && ta.icons[i] != nil {
@@ -347,43 +411,43 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 				}
 			}
 			if !known {
-				m.Item("Looking for programs…").Disabled(true)
+				m.Item(locales.MenuOpenWithLooking()).Disabled(true)
 			}
 			if len(ta.apps) > 0 || !known {
 				m.Separator()
 			}
-			if m.Item("Choose Another App…").Chosen() {
+			if m.Item(locales.MenuOpenWithOther()).Chosen() {
 				w.openWith(path)
 			}
 		})
 	}
 	m.Separator()
 	if !drives {
-		if m.Item("Cut").Shortcut(ui.Cmd, ui.KeyX).Chosen() {
+		if m.Item(locales.MenuCut()).Shortcut(ui.Cmd, ui.KeyX).Chosen() {
 			w.copyChosen(t, true)
 		}
-		if m.Item("Copy").Shortcut(ui.Cmd, ui.KeyC).Chosen() {
+		if m.Item(locales.MenuCopy()).Shortcut(ui.Cmd, ui.KeyC).Chosen() {
 			w.copyChosen(t, false)
 		}
-		if e.IsDir() && m.Item("Paste into Folder").Disabled(!w.canPaste()).Chosen() {
+		if e.IsDir() && m.Item(locales.MenuPasteInto()).Disabled(!w.canPaste()).Chosen() {
 			w.paste(path)
 		}
 	}
-	if m.Item("Copy Path").Shortcut(ui.Cmd|ui.Shift, ui.KeyC).Chosen() {
+	if m.Item(locales.MenuCopyPath()).Shortcut(ui.Cmd|ui.Shift, ui.KeyC).Chosen() {
 		w.copyPaths(t)
 	}
 	if !drives {
 		m.Separator()
-		if m.Item("Rename").Shortcut(0, ui.KeyF2).Chosen() {
+		if m.Item(locales.MenuRename()).Shortcut(0, ui.KeyF2).Chosen() {
 			t.rename = e.Name
 		}
-		if m.Item("Delete").Shortcut(0, ui.KeyDelete).Chosen() {
+		if m.Item(locales.MenuDelete()).Shortcut(0, ui.KeyDelete).Chosen() {
 			w.defer_(func() { w.deleteChosen(t, false) })
 		}
 	}
 	m.Separator()
 	w.more(m, t, false)
-	if m.Item("Properties").Shortcut(ui.Alt, ui.KeyEnter).Chosen() {
+	if m.Item(locales.MenuProperties()).Shortcut(ui.Alt, ui.KeyEnter).Chosen() {
 		w.properties(t)
 	}
 }
@@ -391,31 +455,45 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 // folderMenu is the context menu of the room under the rows: it acts on
 // the folder shown.
 func (w *Window) folderMenu(m *ui.Menu, t *Tab) {
-	if m.Item("New Folder").Shortcut(ui.Cmd|ui.Shift, ui.KeyN).Chosen() {
+	if m.Item(locales.MenuNewFolder()).Shortcut(ui.Cmd|ui.Shift, ui.KeyN).Chosen() {
 		w.newFolder(t)
 	}
-	if m.Item("New Text File").Chosen() {
+	if m.Item(locales.MenuNewTextFile()).Chosen() {
 		w.newFile(t)
 	}
 	m.Separator()
-	if m.Item("Paste").Shortcut(ui.Cmd, ui.KeyV).Disabled(!w.canPaste()).Chosen() {
+	if m.Item(locales.MenuPaste()).Shortcut(ui.Cmd, ui.KeyV).Disabled(!w.canPaste()).Chosen() {
 		w.paste(t.Path)
 	}
-	if m.Item("Copy Folder Path").Chosen() {
+	if m.Item(locales.MenuCopyFolderPath()).Chosen() {
 		w.copyText(t.Path)
 	}
 	m.Separator()
-	m.Submenu("View", func(m *ui.Menu) { w.viewMenu(m, t) })
-	if m.Item("Refresh").Shortcut(0, ui.KeyF5).Chosen() {
+	m.Submenu(locales.View(), func(m *ui.Menu) { w.viewMenu(m, t) })
+	if m.Item(locales.MenuRefresh()).Shortcut(0, ui.KeyF5).Chosen() {
 		w.reload(t)
 	}
 	hidden := w.app.set.ShowHidden
-	if m.Item("Show Hidden Files").Checked(hidden).Shortcut(ui.Cmd, ui.KeyH).Chosen() {
+	if m.Item(locales.MenuShowHidden()).Checked(hidden).Shortcut(ui.Cmd, ui.KeyH).Chosen() {
 		w.setHidden(!hidden)
 	}
 	m.Separator()
 	w.more(m, t, true)
-	if m.Item("Properties").Chosen() {
+	if m.Item(locales.MenuProperties()).Chosen() {
 		w.folderProperties(t)
 	}
+}
+
+// titled is columns with their titles in the language the app shows: the
+// same slice from frame to frame, made anew when the language changes.
+func titled(kept *[]ui.TableColumn, columns []ui.TableColumn, titles []func() string) []ui.TableColumn {
+	if len(*kept) == len(columns) && (*kept)[0].Title == titles[0]() {
+		return *kept
+	}
+	out := slices.Clone(columns)
+	for i := range out {
+		out[i].Title = titles[i]()
+	}
+	*kept = out
+	return out
 }

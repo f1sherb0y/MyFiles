@@ -37,9 +37,16 @@ jobs:
           "VERSION=$version" >> $env:GITHUB_ENV
       - name: Test
         run: go test ./internal/...
-      - name: Build the installer
+      - name: Build the installer and the update
         shell: pwsh
+        env:
+          # The key that signs updates: installed copies take only what it
+          # signed. Without it the build makes no update, and the copies
+          # installed never learn of this version.
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          if (-not $env:MYGO_UPDATER_PRIVATE_KEY) { throw 'the secret MYGO_UPDATER_PRIVATE_KEY is not set' }
           $env:CGO_ENABLED = '0'
           Push-Location third_party\mygo
           go run .\cmd\mygo build ..\..\cmd\myfiles
@@ -54,5 +61,10 @@ jobs:
         run: |
           $files = @(
             "bin\dist\windows-amd64\myfiles-setup-$env:VERSION-amd64.exe",
-            "bin\dist\windows-amd64\MyFiles-$env:VERSION-portable-amd64.exe")
+            "bin\dist\windows-amd64\MyFiles-$env:VERSION-portable-amd64.exe",
+            # What installed copies update from: the manifest they read from
+            # the latest release, and the archive and deltas it names.
+            "bin\dist\windows-amd64\update-windows-amd64.json",
+            "bin\dist\windows-amd64\myfiles-$env:VERSION-windows-amd64.tar.gz")
+          $files += @(Get-ChildItem bin\dist\windows-amd64\*.delta | ForEach-Object FullName)
           gh release create '${{ github.ref_name }}' @files --title "MyFiles $env:VERSION" --generate-notes

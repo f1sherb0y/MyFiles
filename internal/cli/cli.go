@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
 )
 
 // Target is something to show: a folder in a tab, with or without one of
@@ -309,8 +310,9 @@ const computerCLSID = "{20D04FE0-3AEA-1069-A2D8-08002B30309D}"
 // Locate turns what a command line or an address bar names into a clean
 // absolute path: a path, absolute or relative to cwd, with %VARIABLES%; a
 // file: URL; "shell:Name"; or the shell's name for This PC, which gives
-// fsys.Computer. Other places of the shell, which are no directories, are
-// for the system's file manager (locDelegate).
+// fsys.Computer, or for the Recycle Bin, shell.RecycleBin. Other places of
+// the shell, which are no directories, are for the system's file manager
+// (locDelegate).
 func Locate(arg, cwd string) (string, locKind) {
 	arg = strings.TrimSpace(strings.Trim(strings.TrimSpace(arg), `"`))
 	if arg == "" {
@@ -340,6 +342,9 @@ func Locate(arg, cwd string) (string, locKind) {
 		if strings.EqualFold(head, "MyComputerFolder") {
 			return fsys.Computer, locPath
 		}
+		if strings.EqualFold(head, "RecycleBinFolder") && tail == "" {
+			return shell.RecycleBin, locPath
+		}
 		base, ok := fsys.KnownFolder(head)
 		if !ok {
 			return "", locDelegate
@@ -366,9 +371,16 @@ func Locate(arg, cwd string) (string, locKind) {
 	return "", locNone
 }
 
+// placed tells the places that are no directories, and so are not looked
+// for on a disk: the list of drives, the Recycle Bin.
+func placed(path string) bool { return path == fsys.Computer || path == shell.RecycleBin }
+
 func locateCLSID(name string) (string, locKind) {
 	if strings.EqualFold(strings.TrimPrefix(name, "::"), computerCLSID) {
 		return fsys.Computer, locPath
+	}
+	if strings.EqualFold(name, shell.RecycleBin) {
+		return shell.RecycleBin, locPath
 	}
 	return "", locDelegate
 }
@@ -381,7 +393,7 @@ func Find(text, cwd string) (Target, error) {
 	if kind != locPath {
 		return Target{}, fmt.Errorf("cannot show %q", strings.TrimSpace(text))
 	}
-	if path == fsys.Computer {
+	if placed(path) {
 		return Target{Path: path}, nil
 	}
 	e, err := fsys.Stat(path)
@@ -403,7 +415,7 @@ func (cmd *Command) Resolve() error {
 	var first error
 	kept := cmd.Targets[:0]
 	for _, t := range cmd.Targets {
-		if t.Path == fsys.Computer {
+		if placed(t.Path) {
 			kept = append(kept, t)
 			continue
 		}

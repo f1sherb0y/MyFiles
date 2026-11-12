@@ -111,6 +111,19 @@ func (s *systemMenu) close() {}
 
 func openInSystem(string) error { return ErrUnsupported }
 
+const placeRecycleBin, placeComputer, placeNetwork, placeLinux = "::trash", "::computer", "::network", "::linux"
+
+func trash() ([]TrashItem, error)             { return nil, ErrUnsupported }
+func restoreTrash([]string) ([]string, error) { return nil, ErrUnsupported }
+func deleteTrash([]string) error              { return ErrUnsupported }
+func emptyTrash(Window) error                 { return ErrUnsupported }
+
+func displayName(string) string       { return "" }
+func quickAccess() []QuickFolder      { return nil }
+func distros() []string               { return nil }
+func computers() []string             { return nil }
+func shares(string) ([]string, error) { return nil, ErrUnsupported }
+
 func thumbnail(string, int) (*image.RGBA, error) { return nil, ErrUnsupported }
 
 func defaultFileManager(exe string) Default { return Default{} }
@@ -126,3 +139,5 @@ func cutData(cut bool) []byte { return nil }
 func isCut(data []byte) bool { return false }
 
 func quiet() {}
+
+func trashFolders() []string { return nil }

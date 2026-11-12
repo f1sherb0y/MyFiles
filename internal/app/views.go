@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/fsys"
 )
 
@@ -33,7 +34,8 @@ const (
 type viewSpec struct {
 	// id is the name settings and sessions keep, and title the one
 	// menus show.
-	id, title string
+	id    string
+	title func() string
 	// icon is the side of the icons, in DIPs.
 	icon int
 	// width is the least width of an item, and height its height; for
@@ -42,12 +44,12 @@ type viewSpec struct {
 }
 
 var viewSpecs = [viewModes]viewSpec{
-	viewDetails:    {id: "details", title: "Details", icon: iconSize},
-	viewList:       {id: "list", title: "List", icon: iconSize, width: 210},
-	viewTiles:      {id: "tiles", title: "Tiles", icon: 32, width: 230, height: 50},
-	viewIcons:      {id: "icons", title: "Medium Icons", icon: 48, width: 92, height: 92},
-	viewLargeIcons: {id: "large", title: "Large Icons", icon: 96, width: 128, height: 142},
-	viewHugeIcons:  {id: "huge", title: "Extra Large Icons", icon: 192, width: 216, height: 240},
+	viewDetails:    {id: "details", title: locales.ViewDetails, icon: iconSize},
+	viewList:       {id: "list", title: locales.ViewList, icon: iconSize, width: 210},
+	viewTiles:      {id: "tiles", title: locales.ViewTiles, icon: 32, width: 230, height: 50},
+	viewIcons:      {id: "icons", title: locales.ViewIcons, icon: 48, width: 92, height: 92},
+	viewLargeIcons: {id: "large", title: locales.ViewLargeIcons, icon: 96, width: 128, height: 142},
+	viewHugeIcons:  {id: "huge", title: locales.ViewHugeIcons, icon: 192, width: 216, height: 240},
 }
 
 // viewOf is the view mode of a name, the table for one it does not know.
@@ -84,7 +86,7 @@ func (w *Window) setView(t *Tab, m viewMode) {
 func (w *Window) viewMenu(m *ui.Menu, t *Tab) {
 	keys := [viewModes]ui.Key{ui.Key1, ui.Key2, ui.Key3, ui.Key4, ui.Key5, ui.Key6}
 	for mode, spec := range viewSpecs {
-		if m.Item(spec.title).Radio(t.mode == viewMode(mode)).Shortcut(ui.Cmd|ui.Shift, keys[mode]).Chosen() {
+		if m.Item(spec.title()).Radio(t.mode == viewMode(mode)).Shortcut(ui.Cmd|ui.Shift, keys[mode]).Chosen() {
 			w.setView(t, viewMode(mode))
 		}
 	}
@@ -113,6 +115,9 @@ func (w *Window) grid(c *ui.Context, t *Tab, focused bool) {
 		if drives {
 			return t.volumes[t.view[i]].Title()
 		}
+		if t.bin() {
+			return t.trash[t.view[i]].Name
+		}
 		return t.entry(i).Name
 	}
 	st.Selection = &t.sel
@@ -124,7 +129,7 @@ func (w *Window) grid(c *ui.Context, t *Tab, focused bool) {
 		st.Gap = -1
 		height = a.set.RowHeight
 	}
-	if drives {
+	if drives || t.bin() {
 		st.DragData = nil
 	} else {
 		st.DragOptions = transfer.DragOptions{Operations: transfer.Copy | transfer.Move}
@@ -135,8 +140,9 @@ func (w *Window) grid(c *ui.Context, t *Tab, focused bool) {
 			return
 		}
 		e := t.entry(i)
+		w.bandEntry(t, item, e.Name)
 		// A directory takes the files dropped on it.
-		if !drives && e.IsDir() && w.takeFiles(item, t.pathOf(e)) {
+		if real(t.Path) && e.IsDir() && w.takeFiles(item, t.pathOf(e)) {
 			item.Background(th.Accent.Alpha(0.35))
 		}
 		name := e.Name
@@ -162,14 +168,18 @@ func (w *Window) grid(c *ui.Context, t *Tab, focused bool) {
 
 	g := ui.GridView(c.Key(t.ID), st, len(t.view), spec.width, height, func(i int) {
 		w.item(c, t, icons, i)
-	}).Grow(1).MinHeight(0).Padding(2, 6).Label("Files")
+	}).Grow(1).MinHeight(0).Padding(2, 6).Label(locales.Files())
+	w.bandOn(c, t, g)
 	if g.Changed() {
 		t.selStale = true
 	}
 	if g.Submitted() && t.renaming == "" {
 		w.openChosen(t)
 	}
-	if !drives {
+	switch {
+	case t.bin():
+		g.ContextMenu(func(m *ui.Menu) { w.trashFolderMenu(m, t) })
+	case !drives:
 		g.ContextMenu(func(m *ui.Menu) { w.folderMenu(m, t) })
 	}
 	if t.wantFocus && focused && !t.editing && t.renaming == "" {
@@ -179,13 +189,13 @@ func (w *Window) grid(c *ui.Context, t *Tab, focused bool) {
 	if t.rename != "" {
 		// Renaming is asked for: the item shows its name as a text to
 		// edit.
-		if row := t.rowOf(t.rename); row >= 0 && !drives {
+		if row := t.rowOf(t.rename); row >= 0 && real(t.Path) {
 			t.renaming, t.draft, t.renameFresh = t.rename, t.rename, true
 			st.ScrollIntoView(row)
 		}
 		t.rename = ""
 	}
-	if g.Shortcut(0, ui.KeyF2) && t.renaming == "" && !drives && t.cursor >= 0 && t.cursor < len(t.view) {
+	if g.Shortcut(0, ui.KeyF2) && t.renaming == "" && real(t.Path) && t.cursor >= 0 && t.cursor < len(t.view) {
 		t.rename = t.entry(t.cursor).Name
 		c.Invalidate()
 	}
@@ -250,10 +260,12 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 	name := e.Name
 	if drives {
 		name = t.volumes[i].Title()
+	} else if t.bin() {
+		name = t.trash[i].Name
 	}
 	// label builds the name, or the text that renames it.
 	label := func(lines int, center bool) {
-		if t.renaming == e.Name && !drives {
+		if t.renaming == e.Name && real(t.Path) {
 			w.renameInput(c, t, e, center)
 			return
 		}
@@ -285,9 +297,16 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 				small := th.FontSize - 1
 				if drives {
 					if v := &t.volumes[i]; v.Ready {
-						ui.Text(c, formatSize(v.Free)+" free of "+formatSize(v.Total)).SingleLine().FontSize(small).TextColor(th.TextMuted)
-						ui.Text(c, v.FileSystem).SingleLine().FontSize(small).TextColor(th.TextMuted)
+						usageBar(c, v).FillWidth().MaxWidth(170).MarginY(2)
+						ui.Text(c, locales.DriveFreeOf(formatSize(v.Free), formatSize(v.Total))).SingleLine().FontSize(small).TextColor(th.TextMuted)
 					}
+					return
+				}
+				if t.bin() {
+					// Where it was, in place of what kind it is.
+					ui.Text(c, t.trash[i].From).SingleLine().FontSize(small).TextColor(th.TextMuted)
+					tx.make(e)
+					ui.Text(c, tx.modified).SingleLine().FontSize(small).TextColor(th.TextMuted)
 					return
 				}
 				ui.Text(c, a.icons.typeName(e)).SingleLine().FontSize(small).TextColor(th.TextMuted)
@@ -300,9 +319,39 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 	default:
 		ui.Column(c).Grow(1).Padding(6, 4, 2, 4).Gap(4).AlignItems(ui.Center).MinWidth(0).Children(func() {
 			picture()
-			label(2, true)
+			if !drives {
+				label(2, true)
+				return
+			}
+			// A drive: its name on one line, and how full it is under it.
+			label(1, true)
+			if v := &t.volumes[i]; v.Ready {
+				usageBar(c, v).Width(max(size, 64)).Tooltip(locales.DriveFreeOf(formatSize(v.Free), formatSize(v.Total)))
+			}
 		})
 	}
+}
+
+// usageBar shows how full a drive is, as the system's file manager does
+// under its drives: the part in use filled, in red when little is left.
+func usageBar(c *ui.Context, v *fsys.Volume) ui.Element {
+	th := c.Theme()
+	used := float32(0)
+	if v.Total > 0 {
+		used = float32(float64(v.Total-v.Free) / float64(v.Total))
+	}
+	bar := ui.Box(c).Height(5).Shrink(0)
+	bar.Draw(func(p *ui.Painter, r ui.Rect) {
+		p.Fill(r, th.SurfacePressed, r.H/2)
+		color := th.Accent
+		if used > 0.9 {
+			color = th.Danger
+		}
+		if w := r.W * min(max(used, 0), 1); w >= r.H {
+			p.Fill(ui.Rect{X: r.X, Y: r.Y, W: w, H: r.H}, color, r.H/2)
+		}
+	})
+	return bar
 }
 
 // renameInput is the text that renames an entry in a grid, in place of

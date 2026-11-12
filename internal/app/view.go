@@ -5,15 +5,15 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/clock"
-	"myfiles/internal/fsys"
 	"myfiles/internal/workspace"
 )
 
 // edges tells which edges of the window a pane touches: along the top
 // its tab strip is the window's title bar, and in the top right corner it
 // keeps clear of the window's buttons.
-type edges struct{ top, left, right bool }
+type edges struct{ top, left, right, bottom bool }
 
 // splitKey keys the element of a split, apart from a pane's.
 type splitKey struct{ n *workspace.Node }
@@ -35,7 +35,7 @@ func (w *Window) view(c *ui.Context) {
 	bar := c.TitleBar()
 	main := func() {
 		ui.Column(c.Key("panes")).Grow(1).MinWidth(0).MinHeight(0).Children(func() {
-			w.node(c, w.layout.Root, edges{top: true, right: true, left: !a.set.Sidebar}, bar)
+			w.node(c, w.layout.Root, edges{top: true, right: true, bottom: true, left: !a.set.Sidebar}, bar)
 		})
 	}
 	if a.set.Sidebar {
@@ -79,7 +79,7 @@ func (w *Window) node(c *ui.Context, n *workspace.Node, e edges, bar ui.TitleBar
 	}
 	first, second := e, e
 	if n.Stacked {
-		second.top = false
+		second.top, first.bottom = false, false
 	} else {
 		first.right, second.left = false, false
 	}
@@ -127,7 +127,7 @@ func (w *Window) pane(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBar
 		ui.Divider(c)
 		w.body(c, p, t, focused)
 		ui.Divider(c)
-		w.statusBar(c, t)
+		w.statusBar(c, t, e.left && e.bottom)
 	})
 }
 
@@ -181,14 +181,14 @@ func (w *Window) body(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 	})
 
 	filesOver := false
-	if t.Path != fsys.Computer && t.err == nil {
+	if real(t.Path) && t.err == nil {
 		filesOver = w.takeFiles(body, t.Path)
 	}
 	body.Children(func() {
 		switch {
 		case t.err != nil:
 			ui.Column(c).Grow(1).Center().Gap(6).Padding(16).Children(func() {
-				ui.Text(c, "This folder can't be shown").Bold()
+				ui.Text(c, locales.FolderUnreadable()).Bold()
 				ui.Text(c, t.err.Error()).TextColor(th.TextMuted).Wrap().TextAlign(ui.Center)
 			})
 		default:
@@ -225,7 +225,7 @@ func (w *Window) zonePreview(c *ui.Context, zone workspace.Zone) {
 }
 
 // statusBar tells what the folder holds and what is chosen.
-func (w *Window) statusBar(c *ui.Context, t *Tab) {
+func (w *Window) statusBar(c *ui.Context, t *Tab, corner bool) {
 	th := c.Theme()
 	if t.selStale {
 		t.measure()
@@ -234,17 +234,17 @@ func (w *Window) statusBar(c *ui.Context, t *Tab) {
 	switch {
 	case t.Path == "":
 	case t.sel.Len() > 0:
-		left = plural(t.sel.Len(), "item") + " selected"
+		left = locales.StatusSelected(t.sel.Len())
 		if files := t.sel.Len() - t.selDirs; files > 0 {
 			left += "  ·  " + formatSize(t.selBytes)
 		}
 	default:
-		left = plural(len(t.view), "item")
+		left = locales.Items(len(t.view))
 		if t.filter != "" {
-			left += " of " + groupDigits(int64(len(t.entries)-t.hidden))
+			left = locales.StatusItemsOf(len(t.view), len(t.entries)-t.hidden)
 		}
 		if t.hidden > 0 {
-			left += "  ·  " + groupDigits(int64(t.hidden)) + " hidden"
+			left += "  ·  " + locales.StatusHidden(t.hidden)
 		}
 	}
 	right := ""
@@ -252,7 +252,7 @@ func (w *Window) statusBar(c *ui.Context, t *Tab) {
 	case w.status != "":
 		right = w.status
 	case t.loading && clock.Since(t.asked) > 150*time.Millisecond:
-		right = "Reading…"
+		right = locales.StatusReading()
 	case t.shown > 0:
 		right = formatDuration(t.shown)
 	}
@@ -261,6 +261,10 @@ func (w *Window) statusBar(c *ui.Context, t *Tab) {
 		c.After(160 * time.Millisecond)
 	}
 	ui.Row(c.Key("status")).Height(statusHeight).Shrink(0).Padding(0, 8).Gap(12).FontSize(th.FontSize - 1).Children(func() {
+		if corner {
+			// The window's bottom left, where the sidebar is not.
+			w.updateButton(c)
+		}
 		ui.Text(c, left).SingleLine().TextColor(th.TextMuted).Shrink(0)
 		ui.Spacer(c)
 		color := th.TextMuted

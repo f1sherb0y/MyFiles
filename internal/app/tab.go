@@ -7,8 +7,10 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/clock"
 	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
 	"myfiles/internal/workspace"
 )
 
@@ -61,6 +63,9 @@ type Tab struct {
 	// volumes are the drives entries stand for when Path is
 	// fsys.Computer, parallel to entries.
 	volumes []fsys.Volume
+	// trash are the items entries stand for when the tab shows the
+	// Recycle Bin, parallel to entries.
+	trash []shell.TrashItem
 	// err is why the folder could not be read.
 	err error
 	// hidden counts the entries the view leaves out as hidden.
@@ -134,6 +139,11 @@ type Tab struct {
 	// shownAt is when a folder was asked for whose rows have not
 	// reached the screen yet.
 	shownAt clock.Time
+	// band is the press on the view's empty room, and its rectangle.
+	band band
+	// entryBoxes are where the entries the frame built were in the frame
+	// before, in the window: what a press is on, or beside.
+	entryBoxes []ui.Rect
 	// span is how many entries the last frame built, which is about how
 	// many the next folder's first frame shows; building counts those
 	// of the frame being built.
@@ -153,12 +163,16 @@ func (tx *rowText) fresh(size, epoch int) bool {
 // title is what the tab's header shows.
 func (t *Tab) title() string {
 	if t.settings {
-		return "Settings"
+		return locales.Settings()
 	}
 	if t.Path == fsys.Computer {
-		return "This PC"
+		return locales.ThisPC()
 	}
-	return fsys.Base(t.Path)
+	if t.bin() {
+		return locales.RecycleBin()
+	}
+	// A share, or a Linux distribution, by its own name.
+	return treeName(t.Path)
 }
 
 // entry is the entry of a row.
@@ -166,7 +180,8 @@ func (t *Tab) entry(row int) *fsys.Entry { return &t.entries[t.view[row]] }
 
 // pathOf is the path of an entry of the folder shown.
 func (t *Tab) pathOf(e *fsys.Entry) string {
-	if t.Path == fsys.Computer {
+	if t.Path == fsys.Computer || t.bin() {
+		// A drive's root, or where the Recycle Bin keeps the item.
 		return e.Name
 	}
 	return fsys.Join(t.Path, e.Name)
@@ -293,6 +308,8 @@ func (t *Tab) review(showHidden, dirsFirst bool) {
 	if t.Path == fsys.Computer {
 		t.view = fsys.All(t.entries)
 		t.hidden = 0
+	} else if t.bin() {
+		t.view, t.hidden = trashView(t.trash, t.filter, t.order(false)), 0
 	} else {
 		t.view, t.hidden = buildView(t.entries, showHidden, t.filter, t.order(dirsFirst))
 	}
@@ -329,9 +346,11 @@ type loaded struct {
 	entries []fsys.Entry
 	view    []int32
 	volumes []fsys.Volume
-	hidden  int
-	err     error
-	took    time.Duration
+	// trash are the items of the Recycle Bin the entries stand for.
+	trash  []shell.TrashItem
+	hidden int
+	err    error
+	took   time.Duration
 }
 
 // load reads a folder and makes its rows.

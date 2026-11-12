@@ -31,6 +31,17 @@ type Settings struct {
 	// RestoreTabs opens the tabs of the last session when the program
 	// starts without a folder to show.
 	RestoreTabs bool `json:"restoreTabs"`
+	// Pinned are the folders pinned to the sidebar, in its order, and the
+	// system's places among them, by the names package shell has for
+	// them; PinsImported is set once they were taken from the system's
+	// file manager. Expanded are the nodes of the sidebar's tree that
+	// show what they hold.
+	Pinned       []string `json:"pinned,omitempty"`
+	PinsImported bool     `json:"pinsImported,omitempty"`
+	Expanded     []string `json:"expanded,omitempty"`
+	// AutoUpdate looks for newer versions as the program runs, and
+	// downloads them.
+	AutoUpdate bool `json:"autoUpdate"`
 	// View is how new tabs show their folders, as Tab.View.
 	View string `json:"view"`
 	// SortBy and SortDescending are how new tabs sort.
@@ -52,6 +63,7 @@ func Defaults() Settings {
 		Sidebar:      true,
 		SidebarWidth: 168,
 		RestoreTabs:  true,
+		AutoUpdate:   true,
 		SortBy:       "name",
 		View:         "details",
 	}
@@ -130,6 +142,24 @@ func Load() Settings {
 
 // Save writes the settings.
 func (s *Settings) Save() error { return write("settings.json", s) }
+
+// RecentFolder is a folder the user showed, how often, and when last, in
+// seconds since 1970: what the sidebar's recent folders are chosen from.
+type RecentFolder struct {
+	Path  string `json:"path"`
+	Count int    `json:"count"`
+	Last  int64  `json:"last"`
+}
+
+// LoadRecent reads the folders shown in earlier runs, and SaveRecent
+// writes them.
+func LoadRecent() []RecentFolder {
+	var r []RecentFolder
+	_ = read("recent.json", &r)
+	return r
+}
+
+func SaveRecent(r []RecentFolder) error { return write("recent.json", r) }
 
 // LoadSession reads the last session, nil when there is none that holds
 // together.

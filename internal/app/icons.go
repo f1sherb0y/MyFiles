@@ -15,6 +15,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"golang.org/x/image/draw"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/fsys"
 	"myfiles/internal/shell"
 )
@@ -332,11 +333,8 @@ func (ic *icons) deliver() {
 	changed := false
 	for _, r := range results {
 		if r.req.typeOf {
+			// Empty when the system has no name for it: typeName makes one.
 			name := r.name
-			if name == "" {
-				// The system has no name for it.
-				name = guessType(r.req.key)
-			}
 			if old, ok := ic.types[r.req.key]; !ok || old != name {
 				ic.types[r.req.key] = name
 				changed = true
@@ -533,7 +531,7 @@ func (s *iconSet) ask(req iconRequest) {
 // final: nil and true for an entry that has none, nil and false while it
 // is being made.
 func (s *iconSet) thumbnail(dir string, e *fsys.Entry) (*ui.Bitmap, bool) {
-	if s.size < thumbMinSize || dir == fsys.Computer || e.IsDir() || e.Attr&fsys.AttrOffline != 0 || !pictured[e.Ext()] {
+	if s.size < thumbMinSize || !real(dir) || e.IsDir() || e.Attr&fsys.AttrOffline != 0 || !pictured[e.Ext()] {
 		return nil, true
 	}
 	path := fsys.Join(dir, e.Name)
@@ -565,6 +563,10 @@ func (s *iconSet) thumbnail(dir string, e *fsys.Entry) (*ui.Bitmap, bool) {
 func (s *iconSet) forEntry(dir string, e *fsys.Entry) (*ui.Bitmap, bool) {
 	if dir == fsys.Computer {
 		return s.forPath(e.Name, e.Attr)
+	}
+	if !real(dir) {
+		// Of the Recycle Bin: its type's, by the extension it keeps.
+		return s.forType(e)
 	}
 	if shell.OwnIcon(e.Name, e.Attr) {
 		path := fsys.Join(dir, e.Name)
@@ -633,7 +635,7 @@ func (ic *icons) typeName(e *fsys.Entry) string {
 	}
 	if key == "" {
 		// The system has no name for files without an extension.
-		return "File"
+		return locales.TypeFile()
 	}
 	name, ok := ic.types[key]
 	if !ic.askedOf[key] {
@@ -644,15 +646,18 @@ func (ic *icons) typeName(e *fsys.Entry) string {
 		}
 		ic.enqueue(req)
 	}
+	if ok && name == "" {
+		return guessType(key)
+	}
 	return name
 }
 
 // guessType names the type of a key the system has no name for.
 func guessType(key string) string {
 	if key == dirClass {
-		return "File folder"
+		return locales.TypeFolder()
 	}
-	return strings.ToUpper(strings.TrimPrefix(key, ".")) + " File"
+	return locales.TypeOfExtension(strings.ToUpper(strings.TrimPrefix(key, ".")))
 }
 
 // forget drops the icons of the entries of a folder, which a refresh

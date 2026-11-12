@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -10,6 +11,8 @@ import (
 	"myfiles/internal/cli"
 	"myfiles/internal/clock"
 	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
+	"myfiles/internal/watch"
 )
 
 // navMode is how a tab comes to a folder, which says what its history
@@ -71,7 +74,13 @@ func (w *Window) navigate(t *Tab, path string, mode navMode, focus string) {
 	asked := t.asked
 
 	done := make(chan *loaded, 1)
-	go func() { done <- load(ctx, path, showHidden, filter, order) }()
+	go func() {
+		if path == shell.RecycleBin {
+			done <- w.app.loadTrash(filter, order)
+			return
+		}
+		done <- load(ctx, path, showHidden, filter, order)
+	}()
 	arrive := func(l *loaded) {
 		if t.gen != gen || w.tabs[t.ID] != t {
 			return
@@ -136,7 +145,15 @@ func (w *Window) arrive(t *Tab, l *loaded, mode navMode, from visit, focus strin
 	}
 
 	t.Path = l.path
-	t.entries, t.view, t.volumes = l.entries, l.view, l.volumes
+	if l.err == nil {
+		// The sidebar follows: its tree shows the folders read, and its
+		// recent folders count the visit.
+		w.app.listed(l.path, l)
+		if !same && mode != navReplace {
+			w.app.visited(l.path)
+		}
+	}
+	t.entries, t.view, t.volumes, t.trash = l.entries, l.view, l.volumes, l.trash
 	t.text = make([]rowText, len(l.entries))
 	t.err, t.hidden, t.listed = l.err, l.hidden, l.took
 	t.sorted, t.filtered = t.sort, t.filter
@@ -202,7 +219,7 @@ func (w *Window) foresee(t *Tab) {
 	}
 	first = max(min(first, len(t.view)-n), 0)
 	set := a.icons.at(viewSpecs[t.mode].icon)
-	names := t.Path != fsys.Computer && (t.mode == viewDetails || t.mode == viewTiles)
+	names := real(t.Path) && (t.mode == viewDetails || t.mode == viewTiles)
 	// The last asked for is the first answered: from the bottom up, for
 	// the top rows to come first.
 	for row := first + n - 1; row >= first; row-- {
@@ -274,20 +291,77 @@ func (w *Window) refresh(t *Tab) {
 }
 
 // watch follows the changes of the folder shown, reading it again as
-// they come.
+// they come, and going where the folder goes when it is renamed.
+//
+// A folder of a drive is watched by the app's hub, from the root of the
+// drive, which holds no folder: a watch of the folder itself keeps every
+// folder above it from being renamed, moved or deleted to the Recycle
+// Bin, by this program and by any other. Folders of a network, and of
+// drives that can be taken out, are watched themselves, as nothing else
+// tells of them.
 func (w *Window) watch(t *Tab) {
 	if t.unwatch != nil {
 		t.unwatch()
 		t.unwatch = nil
 	}
-	if t.Path == fsys.Computer || t.err != nil {
+	if t.err != nil || !real(t.Path) && !t.bin() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.unwatch = cancel
 	path := t.Path
+	// watched is the folder as the watch knows it, on the main thread: it
+	// goes where the folder goes, and the watch with it.
+	watched := path
+	a := w.app
+	// told runs fn on the main thread, while the tab shows the folder
+	// still and this watch is the one it has.
+	told := func(fn func()) {
+		w.update(func() {
+			if w.tabs[t.ID] == t && t.Path == watched && ctx.Err() == nil {
+				fn()
+			}
+		})
+	}
 	go func() {
-		watch, err := mygo.WatchFiles(ctx, path, mygo.FileWatchOptions{
+		if path == shell.RecycleBin {
+			// What it holds is in a folder on each drive: something made
+			// or gone there is something deleted, put back or emptied, by
+			// any program.
+			for _, dir := range a.desk.trashFolders() {
+				if stop, ok := a.hub.Watch(dir, func(watch.Event) { told(func() { w.refresh(t) }) }); ok {
+					defer stop()
+				}
+			}
+			<-ctx.Done()
+			return
+		}
+		stop, ok := a.hub.Watch(path, func(ev watch.Event) {
+			told(func() {
+				switch ev.Kind {
+				case watch.Moved:
+					// The watch goes on under the new path: renamed again
+					// at once, the folder is followed again.
+					watched = ev.To
+					w.follow(t, ev.To)
+				case watch.Lost:
+					// Watched by no one: the folder read again is watched
+					// again, some way.
+					t.unwatch()
+					t.unwatch = nil
+					w.refresh(t)
+				default:
+					// Changed, or gone, which reading it tells.
+					w.refresh(t)
+				}
+			})
+		})
+		if ok {
+			<-ctx.Done()
+			stop()
+			return
+		}
+		files, err := mygo.WatchFiles(ctx, path, mygo.FileWatchOptions{
 			HintsOnly: true,
 			Debounce:  80 * time.Millisecond,
 			MaxDelay:  400 * time.Millisecond,
@@ -295,22 +369,70 @@ func (w *Window) watch(t *Tab) {
 		if err != nil {
 			return
 		}
-		defer watch.Close()
+		defer files.Close()
 		for {
-			_, err := watch.Next(ctx)
+			_, err := files.Next(ctx)
 			if ctx.Err() != nil {
 				return
 			}
-			w.update(func() {
-				if w.tabs[t.ID] == t && t.Path == path && ctx.Err() == nil {
-					w.refresh(t)
-				}
-			})
+			told(func() { w.refresh(t) })
 			if err != nil {
 				return
 			}
 		}
 	}()
+}
+
+// follow takes a tab where its folder went: renamed, or in a folder that
+// was, it is the same folder under another path, with the same entries
+// chosen and the rows where they were.
+func (w *Window) follow(t *Tab, to string) {
+	from := t.Path
+	if to == "" || to == from {
+		return
+	}
+	w.app.renamed(from, to)
+	t.Path = to
+	// What is being read of the old path is of no use.
+	t.loading = false
+	w.refresh(t)
+	w.changed()
+}
+
+// renamed puts the new path of a folder in the history of every tab, for
+// the ways back and forward to lead where the folders are now. What was
+// renamed is the folder at from or one above it: the part that from and
+// to do not share.
+func (a *App) renamed(from, to string) {
+	// D:\a\old\x\y and D:\a\new\x\y: D:\a\old became D:\a\new.
+	for {
+		pf, okf := fsys.Parent(from)
+		pt, okt := fsys.Parent(to)
+		if !okf || !okt || !strings.EqualFold(fsys.Base(from), fsys.Base(to)) {
+			break
+		}
+		from, to = pf, pt
+	}
+	under := strings.ToLower(strings.TrimRight(from, `\`)) + `\`
+	move := func(path string) string {
+		switch lower := strings.ToLower(path); {
+		case lower+`\` == under:
+			return to
+		case strings.HasPrefix(lower, under):
+			return strings.TrimRight(to, `\`) + `\` + path[len(under):]
+		}
+		return path
+	}
+	for _, w := range a.windows {
+		for _, t := range w.tabs {
+			for i := range t.back {
+				t.back[i].path = move(t.back[i].path)
+			}
+			for i := range t.forward {
+				t.forward[i].path = move(t.forward[i].path)
+			}
+		}
+	}
 }
 
 // up goes to the folder holding the one shown, with it chosen there.
@@ -319,7 +441,7 @@ func (w *Window) up(t *Tab) {
 		return
 	}
 	parent, ok := fsys.Parent(t.Path)
-	if !ok {
+	if !ok || !real(t.Path) {
 		w.navigate(t, fsys.Computer, navPush, t.Path)
 		return
 	}
@@ -354,7 +476,7 @@ func (w *Window) openEntry(t *Tab, e *fsys.Entry) {
 // file, which is chosen in its folder.
 func (w *Window) goTo(t *Tab, text string) {
 	cwd := t.Path
-	if cwd == fsys.Computer {
+	if !real(cwd) {
 		cwd = ""
 	}
 	type found struct {

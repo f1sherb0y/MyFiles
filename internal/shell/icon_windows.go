@@ -140,6 +140,15 @@ var icons struct {
 func icon(path string, attr fsys.Attr, px int, byType bool) (*image.RGBA, error) {
 	class := classFor(px)
 	dir := attr&fsys.AttrDir != 0
+	if strings.HasPrefix(path, "::") {
+		// A place of the system's that is no path, as the Recycle Bin.
+		return placeIcon(path, class)
+	}
+	if !byType && dir {
+		if img := knownFolderIcon(path, px); img != nil {
+			return img, nil
+		}
+	}
 	if !byType {
 		if img, err := lookUpIcon(path, dir, class, false); err == nil {
 			return img, nil
@@ -212,15 +221,25 @@ func lookUpIcon(path string, dir bool, class iconClass, byType bool) (*image.RGB
 		return nil, &fsys.PathError{Op: "icon", Path: path, Err: errNoIcon}
 	}
 
-	key := iconKey{index: info.index, class: class}
+	img, err := iconOf(iconKey{index: info.index, class: class})
+	if err != nil {
+		return nil, &fsys.PathError{Op: "icon", Path: path, Err: err}
+	}
+	return img, nil
+}
+
+// iconOf is the picture of an icon of the system's image lists, made now
+// if it is the first time the icon is seen.
+func iconOf(key iconKey) (*image.RGBA, error) {
 	icons.mu.RLock()
 	img := icons.byKey[key]
 	icons.mu.RUnlock()
 	if img != nil {
 		return img, nil
 	}
-	if img, err = listedIcon(key); err != nil {
-		return nil, &fsys.PathError{Op: "icon", Path: path, Err: err}
+	img, err := listedIcon(key)
+	if err != nil {
+		return nil, err
 	}
 	icons.mu.Lock()
 	defer icons.mu.Unlock()

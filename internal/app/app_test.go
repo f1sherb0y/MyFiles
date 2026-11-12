@@ -268,12 +268,11 @@ func TestCopyCutPasteBetweenTabs(t *testing.T) {
 	h.w.show(dst.ID)
 	h.settle()
 	h.key(ui.Cmd, ui.KeyV)
-	h.wait("the copy", func() bool { return h.exists("dst/a.txt") })
+	// The file is there before the tab shows it: what is waited for is
+	// the tab, chosen file and all.
+	h.wait("the copy, chosen in its tab", func() bool { return h.exists("dst/a.txt") && dst.sel.Has("a.txt") })
 	if !h.exists("src/a.txt") {
 		t.Fatal("a copy took the original away")
-	}
-	if !dst.sel.Has("a.txt") {
-		t.Errorf("the file pasted is not chosen: rows %v", h.rows(dst))
 	}
 
 	// Cut dims the file until it is pasted, which moves it.
@@ -288,12 +287,11 @@ func TestCopyCutPasteBetweenTabs(t *testing.T) {
 	h.w.show(dst.ID)
 	h.settle()
 	h.key(ui.Cmd, ui.KeyV)
-	h.wait("the move", func() bool { return h.exists("dst/b.txt") && !h.exists("src/b.txt") })
+	h.wait("the move, and the source without the file", func() bool {
+		return h.exists("dst/b.txt") && !h.exists("src/b.txt") && reflect.DeepEqual(h.rows(src), []string{"a.txt"})
+	})
 	if h.a.cut != nil {
 		t.Error("the file is still cut after its paste")
-	}
-	if got := h.rows(src); !reflect.DeepEqual(got, []string{"a.txt"}) {
-		t.Errorf("the source still shows %v", got)
 	}
 
 	// What the system's file manager cut pastes as a move here too.
@@ -351,15 +349,10 @@ func TestDragFilesBetweenPanes(t *testing.T) {
 		t.Fatal("the drop was refused")
 	}
 	h.tt.Release(px, py+120)
-	h.wait("the move", func() bool {
-		return h.exists("dst/a.txt") && h.exists("dst/b.txt") && !h.exists("src/a.txt") && !h.exists("src/b.txt")
+	h.wait("the move, shown by both panes", func() bool {
+		return h.exists("dst/a.txt") && h.exists("dst/b.txt") && !h.exists("src/a.txt") && !h.exists("src/b.txt") &&
+			reflect.DeepEqual(h.rows(src), []string{"c.txt"}) && reflect.DeepEqual(h.rows(dst), []string{"sub", "a.txt", "b.txt"})
 	})
-	if got := h.rows(src); !reflect.DeepEqual(got, []string{"c.txt"}) {
-		t.Errorf("the source shows %v", got)
-	}
-	if got := h.rows(dst); !reflect.DeepEqual(got, []string{"sub", "a.txt", "b.txt"}) {
-		t.Errorf("the destination shows %v", got)
-	}
 
 	// On a directory's row, files go into the directory; with Ctrl, as
 	// a copy.
@@ -417,12 +410,11 @@ func TestDeleteRenameCreate(t *testing.T) {
 	h.key(0, ui.KeyF2)
 	h.tt.Type("renamed")
 	h.key(0, ui.KeyEnter)
-	h.wait("the rename", func() bool { return h.exists("renamed.txt") && !h.exists("two.txt") })
+	h.wait("the rename, chosen in its tab", func() bool {
+		return h.exists("renamed.txt") && !h.exists("two.txt") && tab.sel.Has("renamed.txt")
+	})
 	if l := h.desk.launches(); len(l) > 0 {
 		t.Fatalf("the Enter that ends a rename also opened: %q", l)
-	}
-	if !tab.sel.Has("renamed.txt") {
-		t.Errorf("the file renamed is not chosen: %v", h.rows(tab))
 	}
 
 	// A new folder is made, chosen, and ready to be named.
@@ -430,7 +422,9 @@ func TestDeleteRenameCreate(t *testing.T) {
 	h.wait("the new folder", func() bool { return h.exists("New folder") && slices.Contains(h.rows(tab), "New folder") })
 	h.tt.Type("made here")
 	h.key(0, ui.KeyEnter)
-	h.wait("its name", func() bool { return h.exists("made here") && !h.exists("New folder") })
+	h.wait("its name", func() bool {
+		return h.exists("made here") && !h.exists("New folder") && slices.Contains(h.rows(tab), "made here")
+	})
 
 	// A file made by another program shows up by itself.
 	if err := os.WriteFile(h.path("appeared.txt"), []byte("x"), 0o644); err != nil {
@@ -524,6 +518,68 @@ func TestContextMenus(t *testing.T) {
 	}
 }
 
+// TestEmptyRoom checks what a press on the room beside the entries does:
+// it lets go of what was chosen, and dragged it chooses the entries its
+// rectangle touches, added to those chosen when Ctrl is held. A press on
+// an entry stays the entry's.
+func TestEmptyRoom(t *testing.T) {
+	for _, mode := range []viewMode{viewDetails, viewList, viewIcons} {
+		t.Run(viewSpecs[mode].id, func(t *testing.T) {
+			h := newHarness(t, "alpha/", "beta/", "one.txt", "two.txt")
+			tab := h.w.current()
+			h.w.setView(tab, mode)
+			h.settle()
+			chosen := func() []string {
+				var names []string
+				for name := range tab.sel.All() {
+					names = append(names, name)
+				}
+				slices.Sort(names)
+				return names
+			}
+			h.click("beta")
+			if got := chosen(); !slices.Equal(got, []string{"beta"}) {
+				t.Fatalf("a click on an entry chose %v", got)
+			}
+			// The room below the entries, well inside the view.
+			const ex, ey = 700, 480
+			h.tt.ClickAt(ex, ey)
+			h.settle()
+			if got := chosen(); len(got) != 0 {
+				t.Errorf("a click on empty room left %v chosen", got)
+			}
+
+			// A rectangle from the empty room up over the first entries.
+			ax, ay := h.center("alpha")
+			bx, by := h.center("beta")
+			h.drag([2]float32{ex, ey}, [2]float32{ex - 40, ey - 40}, [2]float32{min(ax, bx) - 2, min(ay, by) - 2})
+			if got := chosen(); !slices.Contains(got, "alpha") || !slices.Contains(got, "beta") {
+				t.Errorf("a rectangle over alpha and beta chose %v", got)
+			}
+			// One that shrinks lets go of what it touches no more.
+			h.tt.Press(ex, ey)
+			h.tt.Move(ex-40, ey-40)
+			h.tt.Move(min(ax, bx)-2, min(ay, by)-2)
+			h.settle()
+			h.tt.Move(ex-20, ey-20)
+			h.settle()
+			if got := chosen(); len(got) != 0 {
+				t.Errorf("the rectangle drawn back still has %v chosen", got)
+			}
+			h.tt.Release(ex-20, ey-20)
+			h.settle()
+
+			// With Ctrl, what was chosen stays.
+			h.click("two.txt")
+			h.tt.ClickAtWith(ui.Ctrl, ex, ey)
+			h.settle()
+			if got := chosen(); !slices.Equal(got, []string{"two.txt"}) {
+				t.Errorf("Ctrl and a click on empty room left %v chosen", got)
+			}
+		})
+	}
+}
+
 // TestSettingsTab checks that the settings show in a tab of their own,
 // one for the window, which the keys of folders leave alone.
 func TestSettingsTab(t *testing.T) {
@@ -602,24 +658,24 @@ func TestViews(t *testing.T) {
 		}
 		for _, name := range []string{"alpha", "beta", "one.txt", "two.txt"} {
 			if !h.tt.HasText(name) {
-				t.Fatalf("%s: no %q on screen: %q", viewSpecs[mode].title, name, h.tt.Texts())
+				t.Fatalf("%s: no %q on screen: %q", viewSpecs[mode].id, name, h.tt.Texts())
 			}
 		}
 		// A click chooses, the arrows move, and Enter opens.
 		h.click("one.txt")
 		if !tab.sel.Has("one.txt") || tab.sel.Len() != 1 {
-			t.Fatalf("%s: a click chose %d items", viewSpecs[mode].title, tab.sel.Len())
+			t.Fatalf("%s: a click chose %d items", viewSpecs[mode].id, tab.sel.Len())
 		}
 		h.doubleClick("alpha")
 		if tab.Path != h.path("alpha") {
-			t.Fatalf("%s: a double click on a folder went to %s", viewSpecs[mode].title, tab.Path)
+			t.Fatalf("%s: a double click on a folder went to %s", viewSpecs[mode].id, tab.Path)
 		}
 		if tab.mode != mode {
-			t.Fatalf("%s: the view changed with the folder", viewSpecs[mode].title)
+			t.Fatalf("%s: the view changed with the folder", viewSpecs[mode].id)
 		}
 		h.key(0, ui.KeyBackspace)
 		if tab.Path != h.root || !tab.sel.Has("alpha") {
-			t.Fatalf("%s: Backspace went to %s", viewSpecs[mode].title, tab.Path)
+			t.Fatalf("%s: Backspace went to %s", viewSpecs[mode].id, tab.Path)
 		}
 		h.tt.Advance(time.Second)
 	}
@@ -733,5 +789,178 @@ func TestWheelChangesView(t *testing.T) {
 	h.settle()
 	if tab.mode != viewDetails {
 		t.Fatalf("the wheel alone changed the view to %d", tab.mode)
+	}
+}
+
+// TestUpdateButton checks that a newer version is downloaded unasked and
+// then offered, at the bottom of the sidebar or, without it, of the
+// window: the button starts the program again. Nothing shows before, nor
+// when the settings say not to look.
+func TestUpdateButton(t *testing.T) {
+	h := newHarness(t, "one.txt")
+	h.a.set.AutoUpdate = false
+	h.desk.newer = "9.9.9"
+	h.a.checkUpdate()
+	h.settle()
+	if _, ok := h.tt.Find("Restart to Update"); ok || h.a.updateReady != "" {
+		t.Fatal("an update was looked for with the setting off")
+	}
+	h.a.set.AutoUpdate = true
+	h.a.checkUpdate()
+	h.wait("the update", func() bool { return h.a.updateReady == "9.9.9" })
+	if l := h.desk.launches(); !slices.Equal(l, []string{"install 9.9.9"}) {
+		t.Fatalf("the update did %q", l)
+	}
+	for _, sidebar := range []bool{false, true} {
+		h.a.set.Sidebar = sidebar
+		h.tt.Frame()
+		h.settle()
+		r, ok := h.tt.Find("Restart to Update")
+		if !ok || r.Y < 500 || r.X > 200 {
+			t.Fatalf("with the sidebar %v, the button is at %v (found %v)", sidebar, r, ok)
+		}
+	}
+	// Looked for again, the version in place is not downloaded twice.
+	h.a.checkUpdate()
+	h.settle()
+	if l := h.desk.launches(); len(l) != 0 {
+		t.Errorf("a second check did %q", l)
+	}
+	h.click("Restart to Update")
+	if l := h.desk.launches(); !slices.Equal(l, []string{"relaunch"}) {
+		t.Errorf("the button did %q", l)
+	}
+}
+
+// TestBandEndsWithThePress checks that the rectangle a press on empty room
+// draws is gone once the press is: a click, on an entry or beside them,
+// leaves none following the pointer.
+func TestBandEndsWithThePress(t *testing.T) {
+	for _, mode := range []viewMode{viewDetails, viewList, viewIcons} {
+		t.Run(viewSpecs[mode].id, func(t *testing.T) {
+			h := newHarness(t, "alpha/", "beta/", "one.txt", "two.txt")
+			tab := h.w.current()
+			h.w.setView(tab, mode)
+			h.settle()
+			x, y := h.center("beta")
+			for _, at := range [][2]float32{{700, 480}, {x, y}, {x + 300, y}, {880, y}} {
+				h.tt.ClickAt(at[0], at[1])
+				h.settle()
+				h.tt.Move(at[0]-120, at[1]+60)
+				h.tt.Move(at[0]-200, at[1]+90)
+				h.settle()
+				// A press whose release never came, as one the system took
+				// for a drag: the pointer moving free ends it.
+				tab.band = band{on: true, active: true, x0: 10, y0: 10, base: map[string]bool{}, hit: map[string]bool{}}
+				h.tt.Move(at[0]-100, at[1]+40)
+				h.settle()
+				if tab.band.on || tab.band.active {
+					t.Errorf("after a click at %v the rectangle follows the pointer (on %v, active %v)", at, tab.band.on, tab.band.active)
+					tab.band = band{}
+				}
+			}
+		})
+	}
+}
+
+// TestSidebar checks the sidebar: the folders pinned, taken once from the
+// system's file manager and then the user's to change; the folders used
+// lately; and the tree, whose nodes read what they hold as they open and
+// follow the folders made in them.
+func TestSidebar(t *testing.T) {
+	h := newHarness(t, "alpha/deep/", "alpha/other/", "beta/", "gamma/", "one.txt")
+	a := h.a
+	a.set.Sidebar = true
+	h.desk.quick = []shell.QuickFolder{
+		{Path: h.path("beta"), Pinned: true}, {Path: shell.RecycleBin, Pinned: true}, {Path: h.path("gamma")},
+	}
+	h.desk.linux = []string{"Arch"}
+	a.importPins()
+	h.wait("the pins of the system's file manager", func() bool {
+		return slices.Equal(a.set.Pinned, []string{h.path("beta"), shell.RecycleBin})
+	})
+	// What it lists besides is where the recent folders start.
+	if got := a.recentFolders(); !slices.Equal(got, []string{h.path("gamma")}) {
+		t.Errorf("the recent folders start as %v", got)
+	}
+	// Asked again, as at the next start, the pins are the user's.
+	h.desk.quick = nil
+	a.unpin(shell.RecycleBin)
+	a.importPins()
+	h.settle()
+	if !slices.Equal(a.set.Pinned, []string{h.path("beta")}) {
+		t.Fatalf("a second import changed the pins: %v", a.set.Pinned)
+	}
+
+	// Pinned from a folder's menu, and moved before the other.
+	if err := h.tt.RightClick("alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.tt.ChooseMenuItem("Pin to Sidebar"); err != nil {
+		t.Fatalf("%v: %q", err, h.tt.Menu())
+	}
+	h.settle()
+	a.movePin(h.path("alpha"), h.path("beta"), false)
+	if !slices.Equal(a.set.Pinned, []string{h.path("alpha"), h.path("beta")}) {
+		t.Fatalf("the pins are %v", a.set.Pinned)
+	}
+
+	// A folder shown counts as recent, unless it is pinned.
+	tab := h.w.current()
+	h.w.navigate(tab, h.path("alpha"), navPush, "")
+	h.settle()
+	h.w.navigate(tab, h.path("alpha/deep"), navPush, "")
+	h.settle()
+	recent := a.recentFolders()
+	if !slices.Contains(recent, h.path("alpha/deep")) || slices.Contains(recent, h.path("alpha")) {
+		t.Errorf("after showing alpha and alpha/deep, the recent folders are %v", recent)
+	}
+	a.forgetRecent(h.path("alpha/deep"))
+	if slices.Contains(a.recentFolders(), h.path("alpha/deep")) {
+		t.Error("a folder taken out of the recent ones is still there")
+	}
+
+	// A node of the tree reads its folders as it opens, and not before.
+	alpha := h.path("alpha")
+	if a.side.kids[alpha] != nil && a.side.kids[alpha].loaded {
+		t.Fatal("the tree read a folder no node of it shows")
+	}
+	a.toggle(alpha)
+	h.wait("the folders of the node", func() bool {
+		k := a.side.kids[alpha]
+		return k != nil && k.loaded && slices.Equal(k.paths, []string{h.path("alpha/deep"), h.path("alpha/other")})
+	})
+	// A folder made in it shows in the tree once a tab read the folder.
+	if err := os.Mkdir(h.path("alpha/new"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	h.w.navigate(tab, alpha, navPush, "")
+	h.wait("the new folder in the tree", func() bool { return slices.Contains(a.side.kids[alpha].paths, h.path("alpha/new")) })
+	a.toggle(alpha)
+	if a.side.open[alpha] || len(a.set.Expanded) != 0 {
+		t.Error("the node closed is still kept open")
+	}
+
+	// The network's computers are no folders: their shares are.
+	if !isComputer(`\\NAS`) || isComputer(`\\NAS\public\`) || holdsFolders(`\\NAS`) || !holdsFolders(`\\NAS\public\`) || holdsFolders(shell.RecycleBin) {
+		t.Error("computers, shares and places are told apart wrongly")
+	}
+	shares, err := a.kids(`\\NAS`, false)
+	if err != nil || !slices.Equal(shares, []string{`\\NAS\public\`}) {
+		t.Errorf("a computer holds %v, %v", shares, err)
+	}
+	if got := treeName(`\\NAS\public\`); got != "public" {
+		t.Errorf("a share is called %q", got)
+	}
+	if got := treeName(`\\wsl.localhost\Arch\`); got != "Arch" {
+		t.Errorf("a distribution is called %q", got)
+	}
+	// The Recycle Bin, pinned, shows in the tab as a folder does.
+	a.pin(shell.RecycleBin)
+	h.settle()
+	h.w.navigate(tab, shell.RecycleBin, navPush, "")
+	h.wait("the Recycle Bin in the tab", func() bool { return tab.bin() && !tab.loading })
+	if slices.Contains(a.recentFolders(), shell.RecycleBin) {
+		t.Error("the Recycle Bin counts as a recent folder")
 	}
 }

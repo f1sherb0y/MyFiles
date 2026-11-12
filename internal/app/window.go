@@ -63,8 +63,11 @@ type Window struct {
 
 	// places and volumes are what the sidebar lists, read off the main
 	// thread; sidebarAt is when.
-	places    []fsys.Place
-	volumes   []fsys.Volume
+	volumes []fsys.Volume
+	// linux tells that Linux distributions are installed, and pinAfter
+	// that a pinned folder dragged over another goes after it.
+	linux     bool
+	pinAfter  bool
 	sidebarAt time.Time
 
 	// status is a message the status bars show for a while, as an
@@ -422,7 +425,13 @@ func (w *Window) report(err error) {
 func (w *Window) loadSidebar() {
 	w.sidebarAt = time.Now()
 	go func() {
-		places, volumes := fsys.Places(), fsys.Volumes()
-		w.update(func() { w.places, w.volumes = places, volumes })
+		volumes, linux := fsys.Volumes(), len(w.app.desk.distros()) > 0
+		w.update(func() {
+			w.volumes, w.linux = volumes, linux
+			// The nodes of the tree that are open follow what they hold.
+			for path := range w.app.side.open {
+				w.app.readKids(path)
+			}
+		})
 	}()
 }

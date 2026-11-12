@@ -17,6 +17,7 @@ import (
 	"myfiles/internal/config"
 	"myfiles/internal/fsys"
 	"myfiles/internal/shell"
+	"myfiles/internal/watch"
 	"myfiles/internal/workspace"
 )
 
@@ -60,6 +61,23 @@ type App struct {
 	saveMu sync.Mutex
 	saving bool
 
+	// fileCols and driveCols are the table's columns with their titles in
+	// the language shown, made anew when it changes.
+	fileCols, driveCols, trashCols []ui.TableColumn
+	// lang is the language chosen in the settings, "" for the system's.
+	lang  string
+	langs []string
+	// settingsRead is set once the settings read what they show.
+	settingsRead bool
+	// side is what the sidebars show beside the file system's folders.
+	side *places
+	// hub watches the folders the tabs show, by the drives they are on.
+	hub *watch.Hub
+	// updateReady is the newer version downloaded and in place, which
+	// shows once the program starts again; "" for none. updating is set
+	// while one is looked for or downloaded.
+	updateReady string
+	updating    bool
 	// apps are the programs that open files, by the files' extension.
 	apps map[string]*typeApps
 }
@@ -69,6 +87,8 @@ type App struct {
 // instance to take over.
 func Run(cmd *cli.Command) error {
 	a := &App{set: config.Load(), nextTab: 1, desk: system{}}
+	a.side = newPlaces(&a.set, config.LoadRecent())
+	a.hub = watch.New()
 	a.columns = ui.TableLayout{Order: a.set.ColumnOrder, Widths: a.set.Columns}
 	a.exe, _ = os.Executable()
 	shell.Quiet()
@@ -112,12 +132,17 @@ func Run(cmd *cli.Command) error {
 		if cmd.Bench != "" || cmd.Screenshot != "" {
 			a.bench = newBench(cmd)
 		}
+		a.importPins()
 		a.open(cmd, true)
 		mark("opened")
 		if !solo {
 			// Once the window shows and its folder is read: not in their
 			// way.
 			time.AfterFunc(time.Second, a.warmSystemMenu)
+			a.watchUpdates()
+		} else if cmd.Ephemeral && os.Getenv("MYFILES_UPDATE_DIR") != "" {
+			// Trying an update, beside the copy installed.
+			a.watchUpdates()
 		}
 	})
 	return mygo.App.Run()
@@ -129,7 +154,7 @@ func Run(cmd *cli.Command) error {
 // back when it names no folder.
 func (a *App) open(cmd *cli.Command, first bool) {
 	for _, arg := range cmd.Delegate {
-		// Places that are no folders, as the Recycle Bin, are the
+		// Places that are no folders, as the Control Panel, are the
 		// system's file manager's to show.
 		_ = a.desk.openInSystem(arg)
 	}

@@ -66,18 +66,19 @@ func svg(shapes string) *ui.SVG {
 // The icons of the interface's own buttons, drawn in the color of the
 // text. The icons of files are the system's.
 var (
-	icoBack     = svg(`<path d="M9.5 3.5L5 8l4.5 4.5"/>`)
-	icoForward  = svg(`<path d="M6.5 3.5L11 8l-4.5 4.5"/>`)
-	icoUp       = svg(`<path d="M8 13V3.5M3.5 8L8 3.5 12.5 8"/>`)
-	icoRefresh  = svg(`<path d="M13 8a5 5 0 1 1-1.5-3.55M13 2.5v3h-3"/>`)
-	icoPlus     = svg(`<path d="M8 3.5v9M3.5 8h9"/>`)
-	icoClose    = svg(`<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>`)
-	icoChevron  = svg(`<path d="M6 4l4 4-4 4"/>`)
-	icoSettings = svg(`<path d="M2.5 5h5M11 5h2.5M2.5 11h2.5M8.5 11h5"/><circle cx="9.25" cy="5" r="1.75"/><circle cx="6.75" cy="11" r="1.75"/>`)
-	icoSidebar  = svg(`<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.25 3v10"/>`)
-	icoComputer = svg(`<rect x="2.5" y="3" width="11" height="7.5" rx="1"/><path d="M6 13h4M8 10.5V13"/>`)
-	icoView     = svg(`<rect x="2.75" y="2.75" width="4.25" height="4.25" rx="0.8"/><rect x="9" y="2.75" width="4.25" height="4.25" rx="0.8"/><rect x="2.75" y="9" width="4.25" height="4.25" rx="0.8"/><rect x="9" y="9" width="4.25" height="4.25" rx="0.8"/>`)
-	icoMore     = svg(`<circle cx="4" cy="8" r="0.6"/><circle cx="8" cy="8" r="0.6"/><circle cx="12" cy="8" r="0.6"/>`)
+	icoBack        = svg(`<path d="M9.5 3.5L5 8l4.5 4.5"/>`)
+	icoForward     = svg(`<path d="M6.5 3.5L11 8l-4.5 4.5"/>`)
+	icoUp          = svg(`<path d="M8 13V3.5M3.5 8L8 3.5 12.5 8"/>`)
+	icoRefresh     = svg(`<path d="M13 8a5 5 0 1 1-1.5-3.55M13 2.5v3h-3"/>`)
+	icoPlus        = svg(`<path d="M8 3.5v9M3.5 8h9"/>`)
+	icoClose       = svg(`<path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/>`)
+	icoChevron     = svg(`<path d="M6 4l4 4-4 4"/>`)
+	icoChevronDown = svg(`<path d="M4 6l4 4 4-4"/>`)
+	icoSettings    = svg(`<path d="M2.5 5h5M11 5h2.5M2.5 11h2.5M8.5 11h5"/><circle cx="9.25" cy="5" r="1.75"/><circle cx="6.75" cy="11" r="1.75"/>`)
+	icoSidebar     = svg(`<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.25 3v10"/>`)
+	icoComputer    = svg(`<rect x="2.5" y="3" width="11" height="7.5" rx="1"/><path d="M6 13h4M8 10.5V13"/>`)
+	icoView        = svg(`<rect x="2.75" y="2.75" width="4.25" height="4.25" rx="0.8"/><rect x="9" y="2.75" width="4.25" height="4.25" rx="0.8"/><rect x="2.75" y="9" width="4.25" height="4.25" rx="0.8"/><rect x="9" y="9" width="4.25" height="4.25" rx="0.8"/>`)
+	icoMore        = svg(`<circle cx="4" cy="8" r="0.6"/><circle cx="8" cy="8" r="0.6"/><circle cx="12" cy="8" r="0.6"/>`)
 )
 
 // iconButton is a small square button showing an icon, which lights up

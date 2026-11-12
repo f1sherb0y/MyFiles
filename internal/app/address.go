@@ -5,7 +5,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"myfiles/cmd/myfiles/locales"
 	"myfiles/internal/fsys"
+	"myfiles/internal/shell"
 	"myfiles/internal/workspace"
 )
 
@@ -13,21 +15,21 @@ import (
 // up, the address, and the filter of the rows.
 func (w *Window) toolbar(c *ui.Context, p *workspace.Pane, t *Tab) {
 	ui.Row(c.Key("bar")).Height(barHeight).Shrink(0).Padding(0, 4).Gap(1).Children(func() {
-		if iconButton(c, "back", icoBack, "Back (Alt+Left)").Disabled(len(t.back) == 0).Clicked() {
+		if iconButton(c, "back", icoBack, locales.NavBack()).Disabled(len(t.back) == 0).Clicked() {
 			w.goBack(t)
 		}
-		if iconButton(c, "forward", icoForward, "Forward (Alt+Right)").Disabled(len(t.forward) == 0).Clicked() {
+		if iconButton(c, "forward", icoForward, locales.NavForward()).Disabled(len(t.forward) == 0).Clicked() {
 			w.goForward(t)
 		}
-		if iconButton(c, "up", icoUp, "Up (Alt+Up)").Disabled(t.Path == fsys.Computer).Clicked() {
+		if iconButton(c, "up", icoUp, locales.NavUp()).Disabled(t.Path == fsys.Computer).Clicked() {
 			w.up(t)
 		}
-		if iconButton(c, "refresh", icoRefresh, "Refresh (F5)").Clicked() {
+		if iconButton(c, "refresh", icoRefresh, locales.NavRefresh()).Clicked() {
 			w.reload(t)
 		}
 		w.address(c, t)
 		w.filterField(c, t)
-		iconButton(c, "view", icoView, "View").Menu(func(m *ui.Menu) { w.viewMenu(m, t) })
+		iconButton(c, "view", icoView, locales.View()).Menu(func(m *ui.Menu) { w.viewMenu(m, t) })
 	})
 }
 
@@ -38,9 +40,12 @@ type crumb struct {
 
 // crumbsOf lists the components of a path, from the list of drives down.
 func crumbsOf(path string) []crumb {
-	out := []crumb{{"This PC", fsys.Computer}}
+	out := []crumb{{locales.ThisPC(), fsys.Computer}}
 	if path == fsys.Computer || path == "" {
 		return out
+	}
+	if path == shell.RecycleBin {
+		return append(out, crumb{locales.RecycleBin(), path})
 	}
 	for _, part := range fsys.Split(path) {
 		out = append(out, crumb{part.Name, part.Path})
@@ -73,7 +78,7 @@ func (w *Window) address(c *ui.Context, t *Tab) {
 		box.Border(1, th.Accent)
 		box.Children(func() {
 			in := ui.TextInputBase(c.Key("input"), &t.addr).Grow(1).Height(controlSize-2).Padding(0, 6).
-				Label("Address").AutoFocus()
+				Label(locales.Address()).AutoFocus()
 			switch {
 			case t.fresh:
 				t.fresh = false
@@ -111,10 +116,10 @@ func (w *Window) address(c *ui.Context, t *Tab) {
 		}
 	}
 	box.ContextMenu(func(m *ui.Menu) {
-		if m.Item("Copy Address").Chosen() {
+		if m.Item(locales.AddressCopy()).Chosen() {
 			w.copyText(t.tip())
 		}
-		if m.Item("Edit Address").Shortcut(ui.Cmd, ui.KeyL).Chosen() {
+		if m.Item(locales.AddressEdit()).Shortcut(ui.Cmd, ui.KeyL).Chosen() {
 			w.editAddress(t)
 		}
 	})
@@ -161,11 +166,11 @@ func (w *Window) address(c *ui.Context, t *Tab) {
 					w.defer_(func() { w.newTab(id, path, "") })
 				}
 			}
-			if part.path != fsys.Computer && w.takeFiles(b, part.path) {
+			if real(part.path) && w.takeFiles(b, part.path) {
 				b.Background(th.Accent.Alpha(0.25))
 			}
 		}
-		rest := ui.Box(c.Key("rest")).Grow(1).MinWidth(12).Height(controlSize).Cursor(ui.CursorText).Label("Edit address")
+		rest := ui.Box(c.Key("rest")).Grow(1).MinWidth(12).Height(controlSize).Cursor(ui.CursorText).Label(locales.AddressEditLabel())
 		if rest.Clicked() {
 			w.editAddress(t)
 		}
@@ -200,7 +205,7 @@ func (w *Window) crumbButton(c *ui.Context, key any, name string, current bool) 
 func (w *Window) editAddress(t *Tab) {
 	t.editing, t.fresh = true, true
 	t.addr = t.Path
-	if t.Path == fsys.Computer {
+	if !real(t.Path) {
 		t.addr = ""
 	}
 	w.invalidate()
@@ -212,7 +217,7 @@ func (w *Window) filterField(c *ui.Context, t *Tab) {
 	if t.Path == fsys.Computer {
 		return
 	}
-	in := ui.TextInput(c.Key("filter"), &t.filter).Placeholder("Filter").Label("Filter").
+	in := ui.TextInput(c.Key("filter"), &t.filter).Placeholder(locales.Filter()).Label(locales.Filter()).
 		Width(150).Shrink(1).MinWidth(60).Height(controlSize).Padding(0, 6).TabStop(false).Bind(&t.filterRef)
 	switch {
 	case in.Shortcut(0, ui.KeyEscape):
