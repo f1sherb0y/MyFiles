@@ -344,6 +344,16 @@ func (msgs Messages) ColumnFrom() string {
 	return Catalog.Format(msgs.locale, "columnFrom", nil)
 }
 
+// SidebarFavorites says "Favorites"
+// in the language the app shows.
+func SidebarFavorites() string { return In(i18n.Locale()).SidebarFavorites() }
+
+// SidebarFavorites says "Favorites"
+// in the language of msgs.
+func (msgs Messages) SidebarFavorites() string {
+	return Catalog.Format(msgs.locale, "sidebarFavorites", nil)
+}
+
 // SidebarRecent says "Recent"
 // in the language the app shows.
 func SidebarRecent() string { return In(i18n.Locale()).SidebarRecent() }

@@ -35,6 +35,7 @@
   "trashEmptyState": "The Recycle Bin is empty",
   "columnDeleted": "Date deleted",
   "columnFrom": "Original location",
+  "sidebarFavorites": "Favorites",
   "sidebarRecent": "Recent",
   "sidebarPin": "Pin to Sidebar",
   "sidebarUnpin": "Unpin from Sidebar",

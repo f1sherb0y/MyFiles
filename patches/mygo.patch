@@ -199,7 +199,7 @@ index d4164ec..b953b78 100644
  }
  
 diff --git a/ui/gridview.go b/ui/gridview.go
-index f4444dc..dfaffbe 100644
+index f4444dc..66bba6e 100644
 --- a/ui/gridview.go
 +++ b/ui/gridview.go
 @@ -3,6 +3,8 @@ package ui
@@ -260,24 +260,46 @@ index f4444dc..dfaffbe 100644
  	if width <= 0 {
  		width = c.w
  	}
-@@ -255,8 +286,15 @@ func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
+@@ -129,9 +160,11 @@ func coreGridView(c *context, s *GridState, n int, minWidth, height float32, ite
+ 					cursor = cell
+ 				}
+ 			}
+-			// Empty places keep the last row's items as wide as the others.
++			// Empty places keep the last row's items as wide as the others:
++			// with the border an item has, which is no part of the width
++			// the items share.
+ 			for k := n; k < (r+1)*cols && r == rows-1; k++ {
+-				coreBox(c).Grow(1).Basis(0).MinWidth(0)
++				coreBox(c).Grow(1).Basis(0).MinWidth(0).Border(s.border(), Color{})
+ 			}
+ 		})
+ 	}, gridList)
+@@ -252,11 +285,23 @@ func (s *GridState) dropAt(x, y float32, n int) (to int, cell uint64, after bool
+ // has id.
+ func (s *GridState) cellState(id uint64) *state { return s.rt.states[id] }
+ 
++// border is the width of the line around an item.
++func (s *GridState) border() float32 {
++	switch {
++	case s.Border > 0:
++		return s.Border
++	case s.Border < 0:
++		return 0
++	}
++	return 2
++}
++
  // cell builds item i of a grid, choosing it when clicked.
  func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item func(i int)) *node {
  	t := c.theme
-+	border := float32(2)
-+	switch {
-+	case s.Border > 0:
-+		border = s.Border
-+	case s.Border < 0:
-+		border = 0
-+	}
++	border := s.border()
  	// A border, clear unless chosen, keeps the content in place as it is.
 -	cell := coreColumn(c).Key(s.key(i)).Grow(1).Basis(0).MinWidth(0).Height(height).Radius(t.Radius).Border(2, Color{}).Role(RoleListItem)
 +	cell := coreColumn(c).Key(s.key(i)).Grow(1).Basis(0).MinWidth(0).Height(height).Radius(t.Radius).Border(border, Color{}).Role(RoleListItem)
  	cell.setPos, cell.setSize = i+1, n
  	if s.Label != nil {
  		cell.Label(s.Label(i))
-@@ -274,6 +312,12 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+@@ -274,6 +319,12 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
  			cell.Opacity(0.4)
  		}
  	}
@@ -290,7 +312,7 @@ index f4444dc..dfaffbe 100644
  	if s.Selected != nil {
  		cell.flags |= flagClickable | flagHover | flagChoosable
  		cell.afterInput(func() {
-@@ -290,9 +334,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+@@ -290,9 +341,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
  		cell.checked = 1 + int8(b2f(chosen))
  		switch {
  		case chosen && grid.Focused():
@@ -302,7 +324,7 @@ index f4444dc..dfaffbe 100644
  		default:
  			cell.styleFn = func(cell *node) {
  				if cell.Hovered() {
-@@ -309,6 +353,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
+@@ -309,6 +360,9 @@ func (s *GridState) cell(c *context, grid *node, i, n int, height float32, item
  			})
  		}
  	}

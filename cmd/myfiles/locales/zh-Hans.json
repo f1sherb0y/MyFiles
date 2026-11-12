@@ -34,6 +34,7 @@
   "trashEmptyState": "回收站为空",
   "columnDeleted": "删除日期",
   "columnFrom": "原位置",
+  "sidebarFavorites": "收藏",
   "sidebarRecent": "最近",
   "sidebarPin": "固定到侧栏",
   "sidebarUnpin": "从侧栏取消固定",

@@ -60,8 +60,22 @@ func (w *Window) sidebar(c *ui.Context) {
 			ui.Text(c, "MyFiles").FontWeight(600).TextColor(th.TextMuted).SingleLine()
 		})
 		ui.Scroll(c.Key("places")).Grow(1).MinHeight(0).Padding(2, 4, 8, 4).Children(func() {
+			// The folders every user has, then those the user chose.
+			favorites := false
 			for _, path := range a.set.Pinned {
-				w.sideRow(c, sideRow{path: path, name: a.nameOf(path), pinned: true}, at)
+				if a.ofSystem(path) {
+					w.sideRow(c, sideRow{path: path, name: a.nameOf(path), pinned: true}, at)
+				} else {
+					favorites = true
+				}
+			}
+			if favorites {
+				w.sideHeader(c, locales.SidebarFavorites())
+				for _, path := range a.set.Pinned {
+					if !a.ofSystem(path) {
+						w.sideRow(c, sideRow{path: path, name: a.nameOf(path), pinned: true}, at)
+					}
+				}
 			}
 			if recent := a.recentFolders(); len(recent) > 0 {
 				w.sideHeader(c, locales.SidebarRecent())
@@ -245,7 +259,9 @@ func (w *Window) reorderPin(c *ui.Context, row ui.Element, path string) {
 	if row.Dragging() {
 		row.Opacity(0.45)
 	}
-	if d, over := ui.DragOver[pinDrag](row); over && d.path != path {
+	// Among its own: the folders of the system, or the favorites.
+	same := func(other string) bool { return other != path && a.ofSystem(other) == a.ofSystem(path) }
+	if d, over := ui.DragOver[pinDrag](row); over && same(d.path) {
 		after := false
 		if _, y, in := row.PointerPosition(); in {
 			after = y > row.Bounds().H/2
@@ -259,7 +275,7 @@ func (w *Window) reorderPin(c *ui.Context, row ui.Element, path string) {
 			p.Fill(ui.Rect{X: r.X + 4, Y: y, W: r.W - 8, H: 2}, th.Accent, 1)
 		})
 	}
-	if d, ok := ui.Drop[pinDrag](row); ok && d.path != path {
+	if d, ok := ui.Drop[pinDrag](row); ok && same(d.path) {
 		moved, after := d.path, w.pinAfter
 		w.defer_(func() { a.movePin(moved, path, after) })
 	}

@@ -50,6 +50,9 @@ type places struct {
 	// when the folders or the pins change.
 	shown      []string
 	shownStale bool
+	// own are the user's own folders of the system, as the Desktop, in
+	// lower case, found when first asked for.
+	own map[string]bool
 }
 
 func newPlaces(set *config.Settings, recent []config.RecentFolder) *places {
@@ -68,6 +71,23 @@ func newPlaces(set *config.Settings, recent []config.RecentFolder) *places {
 		p.recent[r.Path] = &r
 	}
 	return p
+}
+
+// ofSystem tells the pinned folders that every user has, as the Desktop,
+// the Downloads and the Recycle Bin, from those the user chose: the
+// sidebar shows the first on top, and the others as favorites.
+func (a *App) ofSystem(path string) bool {
+	if strings.HasPrefix(path, "::") {
+		return true
+	}
+	p := a.side
+	if p.own == nil {
+		p.own = map[string]bool{}
+		for _, place := range fsys.Places() {
+			p.own[strings.ToLower(strings.TrimRight(place.Path, `\`))] = true
+		}
+	}
+	return p.own[strings.ToLower(strings.TrimRight(path, `\`))]
 }
 
 // importPins makes the folders pinned those the system's file manager has

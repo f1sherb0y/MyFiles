@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -962,5 +963,45 @@ func TestSidebar(t *testing.T) {
 	h.wait("the Recycle Bin in the tab", func() bool { return tab.bin() && !tab.loading })
 	if slices.Contains(a.recentFolders(), shell.RecycleBin) {
 		t.Error("the Recycle Bin counts as a recent folder")
+	}
+}
+
+// The items of a last row that is not full are as wide as the others, and
+// stand under them, in every view of a grid.
+func TestLastRowAligned(t *testing.T) {
+	var names []string
+	for i := 0; i < 11; i++ {
+		names = append(names, fmt.Sprintf("d%02d/", i))
+	}
+	h := newHarness(t, names...)
+	tab := h.w.current()
+	for _, mode := range []viewMode{viewList, viewTiles, viewIcons, viewLargeIcons} {
+		h.w.setView(tab, mode)
+		h.settle()
+		// Where each column is, by the rows that are full.
+		columns := map[float32]bool{}
+		firstY, lastY := float32(-1), float32(-1)
+		var last []float32
+		for i := 0; i < 11; i++ {
+			x, y := h.center(fmt.Sprintf("d%02d", i))
+			if firstY < 0 {
+				firstY = y
+			}
+			if y == firstY {
+				columns[x] = true
+			}
+			if y != lastY {
+				lastY, last = y, nil
+			}
+			last = append(last, x)
+		}
+		if lastY == firstY || len(last) == len(columns) {
+			t.Fatalf("view %d: 11 items show in rows of %d, the last of %d: nothing to compare", mode, len(columns), len(last))
+		}
+		for _, x := range last {
+			if !columns[x] {
+				t.Errorf("view %d: an item of the last row is at %v, under no item of the first: %v", mode, x, columns)
+			}
+		}
 	}
 }
