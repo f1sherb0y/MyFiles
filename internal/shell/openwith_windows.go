@@ -30,7 +30,8 @@ const (
 	handlerGetName         = 3
 	handlerGetUIName       = 4
 	handlerGetIconLocation = 5
-	handlerInvoke          = 8
+	// Invoke, the 8th, is not called: it opens the file the system's
+	// way, which may end in OpenWith.exe (see resolve_windows.go).
 )
 
 // handlers calls each with the programs registered to open files with an
@@ -204,24 +205,20 @@ func extractIcon(path string, index int32, px int) *image.RGBA {
 func openIn(owner Window, path string, app App) error {
 	ext := handlersExt(path)
 	return onHost(func() error {
-		data, err := dataObject([]string{path})
-		if err != nil {
-			return err
-		}
-		defer data.release()
 		found := false
-		var invoked error
-		invoke := func(h *object) bool {
+		var opened error
+		open := func(h *object) bool {
 			if handlerString(h, handlerGetName) != app.ID {
 				return true
 			}
 			found = true
-			invoked = h.call(handlerInvoke, uintptr(unsafe.Pointer(data))).err()
+			opened = openWith(owner, path, h, app)
 			return false
 		}
 		// Among the recommended ones, most often; else among all.
-		if err = handlers(ext, false, invoke); err == nil && !found {
-			err = handlers(ext, true, invoke)
+		err := handlers(ext, false, open)
+		if err == nil && !found {
+			err = handlers(ext, true, open)
 		}
 		switch {
 		case err != nil:
@@ -229,8 +226,8 @@ func openIn(owner Window, path string, app App) error {
 		case !found:
 			// The program is no longer there to open such files.
 			return ErrChoose
-		case invoked != nil:
-			return &fsys.PathError{Op: "open", Path: path, Err: invoked}
+		case opened != nil:
+			return opened
 		}
 		dispatchMessages()
 		return nil

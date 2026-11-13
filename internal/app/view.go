@@ -125,6 +125,9 @@ func (w *Window) pane(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBar
 		}
 		w.toolbar(c, p, t)
 		ui.Divider(c)
+		if t.searching() {
+			w.kindBar(c, t)
+		}
 		w.body(c, p, t, focused)
 		ui.Divider(c)
 		w.statusBar(c, t, e.left && e.bottom)
@@ -137,6 +140,17 @@ func (w *Window) pane(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBar
 func (w *Window) body(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 	th := c.Theme()
 	body := ui.Column(c.Key("body")).Grow(1).MinHeight(0).MinWidth(0)
+	// What is typed among the files searches for it: in the folder shown,
+	// unless the tab searches everywhere. Not while a name is typed.
+	// The list of files takes what is typed in it itself (takeTyping):
+	// this is for the keyboard being elsewhere in the pane.
+	renaming := t.textFocus
+	t.textFocus = c.FocusTakesText()
+	body.ObserveInput(func(ev ui.InputEvent) {
+		if ev.Kind == ui.InputText && !renaming && !t.textFocus && !t.editing && t.renaming == "" {
+			w.typed(t, ev.Text)
+		}
+	})
 
 	zone := workspace.ZoneNone
 	if d, over := ui.DragOver[tabDrag](body); over {
@@ -230,8 +244,12 @@ func (w *Window) statusBar(c *ui.Context, t *Tab, corner bool) {
 	if t.selStale {
 		t.measure()
 	}
-	left := ""
+	left, found := "", ""
+	if t.searching() {
+		left, found = t.searchStatus()
+	}
 	switch {
+	case t.searching():
 	case t.Path == "":
 	case t.sel.Len() > 0:
 		left = locales.StatusSelected(t.sel.Len())
@@ -251,6 +269,8 @@ func (w *Window) statusBar(c *ui.Context, t *Tab, corner bool) {
 	switch {
 	case w.status != "":
 		right = w.status
+	case t.searching():
+		right = found
 	case t.loading && clock.Since(t.asked) > 150*time.Millisecond:
 		right = locales.StatusReading()
 	case t.shown > 0:

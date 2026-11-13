@@ -13,8 +13,11 @@
 package shell
 
 import (
+	"encoding/json"
 	"errors"
 	"image"
+	"io"
+	"os/exec"
 
 	"myfiles/internal/fsys"
 )
@@ -120,6 +123,69 @@ func OpenIn(owner Window, path string, app App) error { return openIn(owner, pat
 // the file's extension. Call off the main thread after an explicit selection.
 func SetDefaultApp(path string, app App) error { return setDefaultApp(path, app) }
 
+// Program is something the user starts that is no file: a program as
+// the Start menu lists it, one from the Store among them, or a setting of
+// the system. Path is the name the system finds it by, which Launch
+// takes and Icon draws; it starts with "::".
+type Program struct {
+	Name, Path string
+	// Setting is set for a setting of the system.
+	Setting bool
+}
+
+// Programs lists the programs the Start menu shows and the settings of
+// the Control Panel, in this process: which brings the parts of the
+// system that know of them into it, some twenty megabytes that stay. A
+// program that stays open lists them with ProgramsBy.
+func Programs() []Program { return programs() }
+
+// ProgramsBy lists them in a process of exe's that ends when it has
+// (ListPrograms is what that process runs), and keeps here only what it
+// said: the names, and what Launch and Icon find each by.
+func ProgramsBy(exe string) ([]Program, error) {
+	cmd := exec.Command(exe, ProgramsFlag)
+	hideWindow(cmd)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	var listed []listedProgram
+	if err := json.Unmarshal(out, &listed); err != nil {
+		return nil, err
+	}
+	list := make([]Program, 0, len(listed))
+	for _, l := range listed {
+		list = append(list, l.Program)
+		keepProgram(l.Path, l.ID)
+	}
+	return list, nil
+}
+
+// ProgramsFlag is the argument a program is started with to list the
+// programs and end: its main calls ListPrograms for it.
+const ProgramsFlag = "--list-programs"
+
+// ListPrograms writes the programs and settings to w, for ProgramsBy of
+// the process that started this one.
+func ListPrograms(w io.Writer) error {
+	list := programs()
+	listed := make([]listedProgram, 0, len(list))
+	for _, p := range list {
+		listed = append(listed, listedProgram{p, programID(p.Path)})
+	}
+	return json.NewEncoder(w).Encode(listed)
+}
+
+// listedProgram is a program as one process tells another of it: with
+// what the system knows it by.
+type listedProgram struct {
+	Program
+	ID []byte
+}
+
+// Launch starts a program, or opens a setting, by its Path.
+func Launch(owner Window, path string) error { return launch(owner, path) }
+
 // Properties shows the system's properties of files or directories.
 func Properties(owner Window, paths []string) error { return properties(owner, paths) }
 
@@ -165,6 +231,12 @@ const (
 	// MenuRename: the user chose to rename what the menu is for, which
 	// the caller does in place.
 	MenuRename
+	// MenuOpen: the user chose to open what the menu is for, and
+	// MenuOpenWith to choose a program for it. The caller does both, as
+	// it does a double click: the system's own would send a file it is
+	// unsure of to OpenWith.exe, which shows for Explorer only.
+	MenuOpen
+	MenuOpenWith
 )
 
 // ContextMenu shows the system's own context menu for files or

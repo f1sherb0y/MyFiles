@@ -3,6 +3,7 @@ package shell
 import (
 	"image"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"unsafe"
@@ -108,12 +109,26 @@ func knownFolderIcon(path string, px int) *image.RGBA {
 // placeIcon is the icon of a place of the system's namespace that is no
 // path, by the name the namespace parses.
 func placeIcon(name string, class iconClass) (*image.RGBA, error) {
+	const shgfiPIDL = 0x8
+	if own := programID(name); own != nil {
+		// A program, or a setting: by the identifier it was listed with.
+		flags := uintptr(shgfiPIDL | shgfiSysIconIndex)
+		if class == iconSmall {
+			flags |= shgfiSmallIcon
+		}
+		var info fileInfo
+		r, _, _ := procSHGetFileInfoW.Call(uintptr(unsafe.Pointer(&own[0])), 0, uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info), flags)
+		runtime.KeepAlive(own)
+		if r == 0 {
+			return nil, errNoIcon
+		}
+		return iconOf(iconKey{index: info.index, class: class})
+	}
 	id, err := parsePIDL(name)
 	if err != nil {
 		return nil, err
 	}
 	defer id.free()
-	const shgfiPIDL = 0x8
 	flags := uintptr(shgfiPIDL | shgfiSysIconIndex)
 	if class == iconSmall {
 		flags |= shgfiSmallIcon

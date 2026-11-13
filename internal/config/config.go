@@ -56,6 +56,48 @@ type Settings struct {
 	// a shell.App's ID. An explicit "always" selection also updates the
 	// system default; this keeps the choice usable if that update fails.
 	OpenWith map[string]string `json:"openWith,omitempty"`
+	// Search is how searches read what is typed and what is indexed.
+	Search Search `json:"search"`
+}
+
+// Search are the settings of searching.
+type Search struct {
+	// Fuzzy lets a word match its letters scattered in a name, Pinyin
+	// reads Chinese names by their pinyin, and OrFirst makes | bind
+	// tighter than a space.
+	Fuzzy   bool `json:"fuzzy"`
+	Pinyin  bool `json:"pinyin"`
+	OrFirst bool `json:"orFirst,omitempty"`
+	// History puts the files opened from results before the others.
+	History bool `json:"history"`
+	// Index keeps an index of the names of the drives' files. Off are
+	// the roots of the drives left out of it, and Extra those of the
+	// drives and folders indexed beside the fixed drives.
+	Index bool     `json:"index"`
+	Off   []string `json:"off,omitempty"`
+	Extra []string `json:"extra,omitempty"`
+	// Rules are the rules that leave files out of results or order them,
+	// one a line as the settings show them; RulesSet tells an empty list
+	// the user made from one never touched.
+	Rules    []string `json:"rules,omitempty"`
+	RulesSet bool     `json:"rulesSet,omitempty"`
+	// Filters are kinds of files the user named, by the keyword a query
+	// asks for them with, as ":@keyword".
+	Filters map[string]string `json:"filters,omitempty"`
+	// NoPrograms leaves programs and the system's settings out of what a
+	// search of the whole computer finds.
+	NoPrograms bool `json:"noPrograms,omitempty"`
+	// ContentOff switches the search inside files off; ContentKeyword is
+	// what a search of them starts with, "cs" when empty, ContentExts the
+	// kinds of files read, Lertaro's when empty, and ContentMaxMB the
+	// largest file read, 10 MB when 0.
+	ContentOff     bool   `json:"contentOff,omitempty"`
+	ContentKeyword string `json:"contentKeyword,omitempty"`
+	ContentExts    string `json:"contentExts,omitempty"`
+	ContentMaxMB   int    `json:"contentMaxMB,omitempty"`
+	// Custom are the kinds the user named in the settings: each with the
+	// keyword a query names it by.
+	Custom []CustomFilter `json:"customFilters,omitempty"`
 }
 
 // Defaults are the settings of a first run.
@@ -71,6 +113,7 @@ func Defaults() Settings {
 		AutoUpdate:   true,
 		SortBy:       "name",
 		View:         "details",
+		Search:       Search{Fuzzy: true, Pinyin: true, History: true, Index: true},
 	}
 }
 
@@ -165,6 +208,56 @@ func LoadRecent() []RecentFolder {
 }
 
 func SaveRecent(r []RecentFolder) error { return write("recent.json", r) }
+
+// Opened is a file opened from the results of a search: how much it
+// counts, 10 at most, and when it last was, in seconds since 1970.
+type Opened struct {
+	Score float64 `json:"score"`
+	Last  int64   `json:"last"`
+}
+
+// LoadOpened reads the files opened from results, by their paths, and
+// SaveOpened writes them.
+func LoadOpened() map[string]Opened {
+	m := map[string]Opened{}
+	_ = read("search-history.json", &m)
+	return m
+}
+
+func SaveOpened(m map[string]Opened) error { return write("search-history.json", m) }
+
+// CustomFilter is a kind of file the user named: Keyword is what a query
+// asks for it by, as in ":@code", Label what a button of it says, and
+// Rule what it lets through. Row has a button of it show above results,
+// and Off switches it off without forgetting it.
+type CustomFilter struct {
+	Keyword string `json:"keyword"`
+	Label   string `json:"label,omitempty"`
+	Rule    string `json:"rule"`
+	Row     bool   `json:"row,omitempty"`
+	Off     bool   `json:"off,omitempty"`
+}
+
+// Learned is a file the user opened from the results of a query: how
+// often, of their own choosing, and when last, in seconds since 1970. A
+// file opened often enough for a query is found by it whatever its name.
+type Learned struct {
+	Path  string `json:"path"`
+	Time  int64  `json:"time"`
+	Opens int    `json:"organicOpens"`
+}
+
+// LoadLearned reads the files opened for each query, by the query as it
+// is told from others, and SaveLearned writes them.
+func LoadLearned() map[string][]Learned {
+	m := map[string][]Learned{}
+	_ = read("search-query-associations.json", &m)
+	return m
+}
+
+func SaveLearned(m map[string][]Learned) error {
+	return write("search-query-associations.json", m)
+}
 
 // LoadSession reads the last session, nil when there is none that holds
 // together.

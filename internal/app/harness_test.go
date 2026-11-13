@@ -251,9 +251,21 @@ func newHarness(t *testing.T, entries ...string) *harness {
 			t.Fatal(err)
 		}
 	}
+	// What a search reads of a folder is kept in a folder of the test's
+	// own, not among the user's indexes.
+	cache := t.TempDir()
+	t.Setenv("MYFILES_CACHE_DIR", cache)
 	f := &fakeFrame{}
 	desk := &fakeDesk{frame: f}
 	a := &App{set: config.Defaults(), nextTab: 1, desk: desk, ephemeral: true}
+	t.Cleanup(func() {
+		// The indexes' files are open until then, and cannot be removed.
+		if a.finder != nil {
+			a.finder.Close()
+		}
+	})
+	// The machine's own programs are no part of what a test finds.
+	a.set.Search.NoPrograms = true
 	a.set.Sidebar = false
 	a.side = newPlaces(&a.set, nil)
 	a.hub = watch.New()
@@ -329,8 +341,19 @@ func (h *harness) rows(t *Tab) []string {
 	names := make([]string, len(t.view))
 	for i := range t.view {
 		names[i] = t.entry(i).Name
+		if t.searching() {
+			// What a search found: by its path under the folder searched.
+			names[i] = strings.ReplaceAll(strings.TrimPrefix(names[i], h.root+string(filepath.Separator)), `\`, "/")
+		}
 	}
 	return names
+}
+
+// found waits for the tab's search to be done, and lists what it shows.
+func (h *harness) found(t *Tab) []string {
+	h.t.Helper()
+	h.wait("the search", func() bool { return t.find != nil && t.find.stop == nil && !t.find.slow })
+	return h.rows(t)
 }
 
 // center is the middle of the element showing a text or label.

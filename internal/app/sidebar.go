@@ -51,7 +51,7 @@ func (w *Window) sidebar(c *ui.Context) {
 	cur := w.current()
 	at := ""
 	if cur != nil {
-		at = cur.Path
+		at = cur.place()
 	}
 	ui.Column(c.Key("sidebar")).Grow(1).MinWidth(0).MinHeight(0).Background(th.Surface).Children(func() {
 		// Along the top of the window, the sidebar is its title bar too.

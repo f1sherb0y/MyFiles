@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"strings"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -442,6 +443,19 @@ func closeMenuWindow(hwnd uintptr, owner Window) {
 	procDestroyWindow.Call(hwnd)
 }
 
+// ownAction is what the caller does itself of the system's commands for
+// files: opening, and choosing what to open with.
+func ownAction(verb string, files int) MenuAction {
+	switch {
+	case files == 0:
+	case strings.EqualFold(verb, "open"):
+		return MenuOpen
+	case strings.EqualFold(verb, "openas"):
+		return MenuOpenWith
+	}
+	return MenuDone
+}
+
 // contextMenu runs on a host thread, which is there for what the command
 // chosen leaves behind.
 func contextMenu(owner Window, paths []string, background string, x, y int) (MenuAction, error) {
@@ -479,6 +493,10 @@ func contextMenu(owner Window, paths []string, background string, x, y int) (Men
 			// in, which the shell's command asks to; it has none to ask
 			// here, and fails: the caller renames.
 			action = MenuRename
+			return nil
+		}
+		if own := ownAction(m.verb(command), len(paths)); own != MenuDone {
+			action = own
 			return nil
 		}
 		parent := uintptr(owner)

@@ -4,6 +4,7 @@ package shell
 
 import (
 	"image"
+	"os/exec"
 	"sync"
 
 	"myfiles/internal/fsys"
@@ -110,6 +111,16 @@ func (s *systemMenu) invoke(int) (MenuAction, error) { return MenuDone, ErrUnsup
 func (s *systemMenu) close() {}
 
 func openInSystem(string) error { return ErrUnsupported }
+
+func programs() []Program { return nil }
+
+func programID(string) []byte { return nil }
+
+func keepProgram(string, []byte) {}
+
+func hideWindow(*exec.Cmd) {}
+
+func launch(Window, string) error { return ErrUnsupported }
 
 const placeRecycleBin, placeComputer, placeNetwork, placeLinux = "::trash", "::computer", "::network", "::linux"
 

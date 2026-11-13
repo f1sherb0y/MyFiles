@@ -165,6 +165,8 @@ func (w *Window) settingsPage(c *ui.Context) {
 			changed = ui.Checkbox(c, &set.ConfirmTrash, locales.SettingsConfirmTrash()).Changed() || changed
 			changed = ui.Checkbox(c, &set.RestoreTabs, locales.SettingsRestoreTabs()).Changed() || changed
 
+			changed = w.searchSettings(c) || changed
+
 			section(c, locales.SettingsUpdates())
 			if ui.Checkbox(c, &set.AutoUpdate, locales.SettingsAutoUpdate()).Changed() {
 				changed = true

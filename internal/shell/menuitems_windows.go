@@ -16,6 +16,8 @@ type systemMenu struct {
 	t     *thread
 	m     *shellMenu
 	owner Window
+	// files is how many files the menu is of, 0 for a folder's own.
+	files int
 	items []MenuItem
 	// subs are the submenus met so far: Sub of an item is the place of
 	// its submenu here, plus one.
@@ -36,7 +38,7 @@ func loadMenu(owner Window, paths []string, background string) (*SystemMenu, err
 	if len(paths) == 0 && background == "" {
 		return nil, ErrUnsupported
 	}
-	s := &systemMenu{t: takeHost(), owner: owner}
+	s := &systemMenu{t: takeHost(), owner: owner, files: len(paths)}
 	var err error
 	s.t.run(func() {
 		flags := uint32(cmfExplore | cmfCanRename)
@@ -201,6 +203,10 @@ func (s *systemMenu) invoke(id int) (MenuAction, error) {
 		if s.m.verb(id) == renameVerb {
 			// The view the menu is of renames in place: see contextMenu.
 			action = MenuRename
+			return
+		}
+		if own := ownAction(s.m.verb(id), s.files); own != MenuDone {
+			action = own
 			return
 		}
 		var at point

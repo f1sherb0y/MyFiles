@@ -59,9 +59,28 @@ type executeInfo struct {
 // without it the system also tells the user itself, in a window of
 // owner's.
 func execute(owner Window, verb, path, dir string, mask uint32) error {
+	return executeAs(owner, verb, path, dir, "", "", mask)
+}
+
+// executeAs is execute with the verbs of a class, as "Bandizip.rar", in
+// place of those the system finds for the file, and with what the file,
+// when it is a program, is started with: "" for neither.
+func executeAs(owner Window, verb, path, dir, class, params string, mask uint32) error {
 	info := executeInfo{mask: mask, hwnd: uintptr(owner), show: swShowNormal}
 	info.size = uint32(unsafe.Sizeof(info))
 	var err error
+	if class != "" {
+		const seeMaskClassName = 0x1
+		if info.class, err = windows.UTF16PtrFromString(class); err != nil {
+			return &fsys.PathError{Op: "open", Path: path, Err: err}
+		}
+		info.mask |= seeMaskClassName
+	}
+	if params != "" {
+		if info.parameters, err = windows.UTF16PtrFromString(params); err != nil {
+			return &fsys.PathError{Op: "open", Path: path, Err: err}
+		}
+	}
 	if info.file, err = windows.UTF16PtrFromString(path); err != nil {
 		return &fsys.PathError{Op: "open", Path: path, Err: err}
 	}
@@ -88,31 +107,18 @@ var errNoProgram = errors.New("no program opens the file")
 func open(owner Window, path, dir string) error {
 	err := openDefault(owner, path, dir)
 	if err == errNoProgram {
-		// The system's dialog that asks which program to use is not
-		// started: a program cannot, here (OpenWith.exe ends at once
-		// with 0x80073D54, "the process has no package identity", and
-		// the verb "openas" shows nothing: Windows 11 26300, 2026-11).
-		// The caller asks, with the programs Apps lists.
+		// The system's dialog that asks which program to use is never
+		// started (see resolve_windows.go): the caller asks, with the
+		// programs Apps lists.
 		return ErrChoose
 	}
 	return err
 }
 
+// openDefault opens a file with the program set for its type, found here
+// and not by the system: errNoProgram for a file nothing is set for.
 func openDefault(owner Window, path, dir string) error {
-	if needsChoice(path) {
-		// The system would ask which program to use, in a dialog that
-		// the quiet way of opening keeps from showing, so that nothing
-		// happens and no error tells of it.
-		return errNoProgram
-	}
-	return onSTA(func() error {
-		err := execute(owner, "", path, dir, seeMaskInvokeIDList|seeMaskNoAsync|seeMaskNoUI)
-		if errors.Is(err, windows.ERROR_NO_ASSOCIATION) {
-			// No program opens files of the type: the user chooses one.
-			return errNoProgram
-		}
-		return err
-	})
+	return openResolved(owner, path, dir, 0)
 }
 
 // openInSystem starts the system's file manager with a place to show.
@@ -144,9 +150,9 @@ func properties(owner Window, paths []string) error {
 	})
 }
 
-// dataObject is the shell's IDataObject of some files, as a drag of them
-// or the clipboard would carry, to be released.
-func dataObject(paths []string) (*object, error) {
+// itemArray is the shell's items for some files (an IShellItemArray), to
+// be released.
+func itemArray(paths []string) (*object, error) {
 	ids := make([]pidl, 0, len(paths))
 	defer func() { freePIDLs(ids) }()
 	for _, path := range paths {
@@ -161,10 +167,20 @@ func dataObject(paths []string) (*object, error) {
 	if err := hresult(hr).err(); err != nil {
 		return nil, err
 	}
+	return items, nil
+}
+
+// dataObject is the shell's IDataObject of some files, as a drag of them
+// or the clipboard would carry, to be released.
+func dataObject(paths []string) (*object, error) {
+	items, err := itemArray(paths)
+	if err != nil {
+		return nil, err
+	}
 	defer items.release()
 	const bindToHandler = 3
 	var data *object
-	err := items.call(bindToHandler, 0, uintptr(unsafe.Pointer(&bhidDataObject)),
+	err = items.call(bindToHandler, 0, uintptr(unsafe.Pointer(&bhidDataObject)),
 		uintptr(unsafe.Pointer(&iidDataObject)), uintptr(unsafe.Pointer(&data))).err()
 	return data, err
 }

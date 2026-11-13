@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
@@ -24,6 +26,7 @@ var (
 		{ID: colSize, Width: 82, MinWidth: 50, Align: ui.End, Sortable: true},
 	}
 	fileTitles   = [...]func() string{locales.ColumnName, locales.ColumnModified, locales.ColumnType, locales.ColumnSize}
+	findTitles   = [...]func() string{locales.ColumnName, locales.ColumnModified, locales.ColumnFolder, locales.ColumnSize}
 	driveTitles  = [...]func() string{locales.ColumnName, locales.ColumnFree, locales.ColumnFileSystem, locales.ColumnTotal}
 	trashTitles  = [...]func() string{locales.ColumnName, locales.ColumnDeleted, locales.ColumnFrom, locales.ColumnSize}
 	driveColumns = []ui.TableColumn{
@@ -41,7 +44,11 @@ var tracing = os.Getenv("MYFILES_TRACE") != ""
 func (w *Window) files(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 	a := w.app
 	drives := t.Path == fsys.Computer
-	if !drives && (t.sort != t.sorted || t.filter != t.filtered) {
+	if f := t.find; f != nil {
+		if f.sort != f.sorted {
+			t.findView()
+		}
+	} else if !drives && (t.sort != t.sorted || t.filter != t.filtered) {
 		if t.sort != t.sorted {
 			a.set.SortBy, a.set.SortDescending = t.sort.Column, t.sort.Descending
 			a.saveSoon()
@@ -83,8 +90,15 @@ func (w *Window) files(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 		if t.bin() {
 			msg = locales.TrashEmptyState()
 		}
-		if t.filter != "" {
-			msg = locales.FilterNoMatch()
+		if f := t.find; f != nil {
+			switch {
+			case f.stop != nil || f.reading:
+				msg = locales.SearchSearching()
+			case strings.TrimSpace(t.filter) == "" && f.kind == 0:
+				msg = locales.SearchKeepTyping()
+			default:
+				msg = locales.SearchNoMatch()
+			}
 		}
 		ui.Text(c, msg).Absolute().Top(48).Left(0).Right(0).TextAlign(ui.Center).
 			TextColor(c.Theme().TextMuted).PassThrough()
@@ -112,6 +126,9 @@ func (w *Window) details(c *ui.Context, t *Tab, focused bool) {
 			// The name it had, not the one it is kept under.
 			return t.trash[t.view[row]].Name
 		}
+		if t.searching() {
+			return t.result(t.view[row]).Name
+		}
 		return t.entry(row).Name
 	}
 	st.Selection = &t.sel
@@ -134,6 +151,12 @@ func (w *Window) details(c *ui.Context, t *Tab, focused bool) {
 		}
 	} else {
 		st.Sort = &t.sort
+		if t.searching() {
+			// What was found, with the folder each is in: ordered by how
+			// well it matches until a column is asked for.
+			columns = titled(&a.findCols, fileColumns, findTitles[:])
+			st.Sort = &t.find.sort
+		}
 		st.DragOptions = transfer.DragOptions{Operations: transfer.Copy | transfer.Move}
 		st.DragData = func(rows []int) transfer.Data { return t.dragData(rows) }
 		// A directory's row takes the files dropped on it.
@@ -163,13 +186,14 @@ func (w *Window) details(c *ui.Context, t *Tab, focused bool) {
 			a.set.Columns, a.set.ColumnOrder = st.Columns.Widths, st.Columns.Order
 			a.saveSoon()
 		}
+		w.takeTyping(c, t, table, !drives)
 		if table.Submitted() {
 			w.openChosen(t)
 		}
 		switch {
 		case t.bin():
 			table.ContextMenu(func(m *ui.Menu) { w.trashFolderMenu(m, t) })
-		case !drives:
+		case !drives && !t.searching():
 			table.ContextMenu(func(m *ui.Menu) { w.folderMenu(m, t) })
 		}
 		if t.wantFocus && focused && !t.editing {
@@ -179,6 +203,14 @@ func (w *Window) details(c *ui.Context, t *Tab, focused bool) {
 		}
 		if t.rename != "" {
 			if row := t.rowOf(t.rename); row >= 0 {
+				if t.searching() {
+					// What was found shows its name lit where it matches,
+					// which is no text to edit: the row asked for shows
+					// one, built before it can be edited.
+					t.find.renaming, t.find.renameBuilt = t.rename, 0
+					t.text[t.view[row]].spans = nil
+					w.invalidate()
+				}
 				st.Edit(t.rename)
 				t.rename = ""
 			}
@@ -203,7 +235,7 @@ func (w *Window) cell(c *ui.Context, t *Tab, row, col int) {
 		t.building++
 		tx.fresh(iconSize, a.icons.epoch)
 		if tx.icon == nil {
-			if icon, final := a.icons.at(iconSize).forEntry(t.Path, e); final {
+			if icon, final := a.icons.at(iconSize).forEntry(t.iconOf(i)); final {
 				tx.icon = icon
 			} else if icon != nil {
 				ui.Image(c, icon).Size(iconSize, iconSize).Shrink(0).MarginEnd(6)
@@ -222,6 +254,30 @@ func (w *Window) cell(c *ui.Context, t *Tab, row, col int) {
 			ui.Text(c, t.volumes[i].Title()).SingleLine().Grow(1).MinWidth(0)
 		case t.bin():
 			ui.Text(c, t.trash[i].Name).SingleLine().Grow(1).MinWidth(0)
+		case t.searching() && t.find.renaming == e.Name:
+			// Its name, to edit: renamed where it is, in its folder.
+			f := t.find
+			f.renameBuilt++
+			was := t.result(i).Name
+			name := was
+			text := ui.EditableText(c, &name).Grow(1)
+			switch {
+			case text.Changed():
+				f.renaming = ""
+				if name != "" && name != was {
+					w.renameResult(t, e.Name, name)
+				}
+				w.invalidate()
+			case f.renameBuilt > 3 && !t.nameTyped(c):
+				// Left as it was.
+				f.renaming = ""
+				w.invalidate()
+			}
+		case t.searching():
+			if tx.spans == nil {
+				tx.spans = t.find.highlight(c, t.result(i).Name, e.Hidden())
+			}
+			ui.RichText(c, tx.spans...).SingleLine().Grow(1).MinWidth(0)
 		default:
 			name := e.Name
 			text := ui.EditableText(c, &name).Grow(1)
@@ -251,12 +307,43 @@ func (w *Window) cell(c *ui.Context, t *Tab, row, col int) {
 			ui.Text(c, t.trash[i].From).SingleLine().TextColor(th.TextMuted)
 			return
 		}
+		if t.searching() {
+			// The folder it is in, lit where the query is in its names.
+			r := t.result(i)
+			if isProgram(r.Path) {
+				kind := locales.SearchProgram()
+				if a.setting(r.Path) {
+					kind = locales.SearchSetting()
+				}
+				ui.Text(c, kind).SingleLine().TextColor(th.TextMuted)
+				return
+			}
+			dir := t.where(r)
+			if s := t.find.snippets[r.Path]; s != "" {
+				// Found by what is in it: the text there, then the folder.
+				ui.Text(c, s+"  ·  "+dir).SingleLine().TextColor(th.TextMuted).Tooltip(s)
+				return
+			}
+			if !r.ByFolder {
+				ui.Text(c, dir).SingleLine().TextColor(th.TextMuted).Tooltip(dir)
+				return
+			}
+			if tx.dirSpans == nil {
+				tx.dirSpans = t.find.highlight(c, dir, true)
+			}
+			ui.RichText(c, tx.dirSpans...).SingleLine().Tooltip(dir)
+			return
+		}
 		ui.Text(c, a.icons.typeName(e)).SingleLine().TextColor(th.TextMuted)
 	case 3:
 		if drives {
 			if v := &t.volumes[i]; v.Ready {
 				ui.Text(c, formatSize(v.Total)).SingleLine().TextColor(th.TextMuted)
 			}
+			return
+		}
+		if t.searching() && isProgram(e.Name) {
+			// A program has no size to tell.
 			return
 		}
 		tx.make(e)
@@ -284,12 +371,27 @@ func (tx *rowText) make(e *fsys.Entry) {
 // fileKeys handles the keys of the entries, while they have the focus:
 // pressed reports a key pressed there.
 func (w *Window) fileKeys(c *ui.Context, t *Tab, pressed func(mods ui.Modifiers, key ui.Key) bool) {
-	if c.FocusTakesText() {
+	if t.nameTyped(c) {
 		// A name is being typed: the keys are its text's.
 		return
 	}
 	drives := t.Path == fsys.Computer
 	switch {
+	case t.searching() && pressed(0, ui.KeyBackspace):
+		// What was typed loses its last character.
+		if _, size := utf8.DecodeLastRuneInString(t.filter); size > 0 {
+			t.filter = t.filter[:len(t.filter)-size]
+			t.caretEnd = true
+			t.filterRef.Focus()
+			w.setQuery(t)
+		}
+	case t.searching() && pressed(0, ui.KeyEscape):
+		w.endSearch(t)
+	case t.searching() && pressed(0, ui.KeyF2):
+		if t.cursor >= 0 && t.cursor < len(t.view) && !isProgram(t.entry(t.cursor).Name) {
+			t.rename = t.entry(t.cursor).Name
+			w.invalidate()
+		}
 	case pressed(0, ui.KeyBackspace):
 		w.up(t)
 	case pressed(ui.Alt, ui.KeyEnter):
@@ -314,7 +416,9 @@ func (w *Window) fileKeys(c *ui.Context, t *Tab, pressed func(mods ui.Modifiers,
 	case pressed(ui.Cmd, ui.KeyX):
 		w.copyChosen(t, true)
 	case pressed(ui.Cmd, ui.KeyV):
-		w.paste(t.Path)
+		if !t.searching() {
+			w.paste(t.Path)
+		}
 	case pressed(ui.Cmd|ui.Shift, ui.KeyC):
 		w.copyPaths(t)
 	}
@@ -369,6 +473,13 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 	}
 	e := t.entry(row)
 	path := t.pathOf(e)
+	if t.searching() && isProgram(path) {
+		// A program, or a setting: opened, and no more.
+		if m.Item(locales.MenuOpen()).Chosen() {
+			w.defer_(func() { w.openChosen(t) })
+		}
+		return
+	}
 	drives := t.Path == fsys.Computer
 	pane := workspace.PaneID(0)
 	if p := w.layout.PaneOf(t.ID); p != nil {
@@ -376,6 +487,9 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 	}
 	if m.Item(locales.MenuOpen()).Chosen() {
 		w.defer_(func() { w.openChosen(t) })
+	}
+	if t.searching() && m.Item(locales.MenuOpenLocation()).Chosen() {
+		w.defer_(func() { w.openLocation(t, path) })
 	}
 	if e.IsDir() {
 		if m.Item(locales.MenuOpenNewTab()).Chosen() {
@@ -438,6 +552,7 @@ func (w *Window) entryMenu(m *ui.Menu, t *Tab, row int) {
 	}
 	if !drives {
 		m.Separator()
+		// A result is renamed where it is: in its folder.
 		if m.Item(locales.MenuRename()).Shortcut(0, ui.KeyF2).Chosen() {
 			t.rename = e.Name
 		}

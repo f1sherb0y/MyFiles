@@ -128,15 +128,13 @@ func TestFilterAndSort(t *testing.T) {
 	h.settle()
 
 	h.key(ui.Cmd, ui.KeyF)
-	h.tt.Type("T")
+	h.tt.Type("tw")
 	h.settle()
-	if got, want := h.rows(tab), []string{"one.txt", "two.txt"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("filtered rows %v, want %v", got, want)
+	if got, want := h.found(tab), []string{"two.txt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("found %v, want %v", got, want)
 	}
 	h.key(0, ui.KeyEscape)
-	if len(tab.view) != 4 {
-		t.Fatalf("after clearing the filter: %v", h.rows(tab))
-	}
+	h.wait("the folder again", func() bool { return !tab.searching() && len(tab.view) == 4 })
 
 	// A click on a header sorts by it, directories still first; another
 	// reverses.

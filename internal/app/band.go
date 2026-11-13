@@ -46,6 +46,9 @@ func (w *Window) bandOn(c *ui.Context, t *Tab, area ui.Element) {
 	b.refSeen = false
 	area.HandleInput(func(ev ui.InputEvent) bool {
 		switch ev.Kind {
+		case ui.InputText, ui.InputCompose:
+			// What is typed among the files: see takeTyping.
+			return w.listText(t, ev)
 		case ui.InputPointerDown:
 			if ev.Button != 0 {
 				return false

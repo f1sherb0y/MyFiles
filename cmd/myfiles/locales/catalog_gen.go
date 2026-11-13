@@ -1341,3 +1341,667 @@ func SettingsTextSize() string { return In(i18n.Locale()).SettingsTextSize() }
 func (msgs Messages) SettingsTextSize() string {
 	return Catalog.Format(msgs.locale, "settingsTextSize", nil)
 }
+
+// Search says "Search"
+// in the language the app shows.
+func Search() string { return In(i18n.Locale()).Search() }
+
+// Search says "Search"
+// in the language of msgs.
+func (msgs Messages) Search() string {
+	return Catalog.Format(msgs.locale, "search", nil)
+}
+
+// SearchIn says "Search {folder}"
+// in the language the app shows.
+func SearchIn(folder string) string { return In(i18n.Locale()).SearchIn(folder) }
+
+// SearchIn says "Search {folder}"
+// in the language of msgs.
+func (msgs Messages) SearchIn(folder string) string {
+	return Catalog.Format(msgs.locale, "searchIn", map[string]any{"folder": folder})
+}
+
+// SearchEverywhere says "Search this PC"
+// in the language the app shows.
+func SearchEverywhere() string { return In(i18n.Locale()).SearchEverywhere() }
+
+// SearchEverywhere says "Search this PC"
+// in the language of msgs.
+func (msgs Messages) SearchEverywhere() string {
+	return Catalog.Format(msgs.locale, "searchEverywhere", nil)
+}
+
+// SearchScopeFolder says "Search in this folder"
+// in the language the app shows.
+func SearchScopeFolder() string { return In(i18n.Locale()).SearchScopeFolder() }
+
+// SearchScopeFolder says "Search in this folder"
+// in the language of msgs.
+func (msgs Messages) SearchScopeFolder() string {
+	return Catalog.Format(msgs.locale, "searchScopeFolder", nil)
+}
+
+// SearchScopeEverywhere says "Search the whole computer"
+// in the language the app shows.
+func SearchScopeEverywhere() string { return In(i18n.Locale()).SearchScopeEverywhere() }
+
+// SearchScopeEverywhere says "Search the whole computer"
+// in the language of msgs.
+func (msgs Messages) SearchScopeEverywhere() string {
+	return Catalog.Format(msgs.locale, "searchScopeEverywhere", nil)
+}
+
+// SearchTitle says "Search: {query}"
+// in the language the app shows.
+func SearchTitle(query string) string { return In(i18n.Locale()).SearchTitle(query) }
+
+// SearchTitle says "Search: {query}"
+// in the language of msgs.
+func (msgs Messages) SearchTitle(query string) string {
+	return Catalog.Format(msgs.locale, "searchTitle", map[string]any{"query": query})
+}
+
+// SearchNoMatch says "Nothing found"
+// in the language the app shows.
+func SearchNoMatch() string { return In(i18n.Locale()).SearchNoMatch() }
+
+// SearchNoMatch says "Nothing found"
+// in the language of msgs.
+func (msgs Messages) SearchNoMatch() string {
+	return Catalog.Format(msgs.locale, "searchNoMatch", nil)
+}
+
+// SearchKeepTyping says "Type to search"
+// in the language the app shows.
+func SearchKeepTyping() string { return In(i18n.Locale()).SearchKeepTyping() }
+
+// SearchKeepTyping says "Type to search"
+// in the language of msgs.
+func (msgs Messages) SearchKeepTyping() string {
+	return Catalog.Format(msgs.locale, "searchKeepTyping", nil)
+}
+
+// SearchSearching says "Searching…"
+// in the language the app shows.
+func SearchSearching() string { return In(i18n.Locale()).SearchSearching() }
+
+// SearchSearching says "Searching…"
+// in the language of msgs.
+func (msgs Messages) SearchSearching() string {
+	return Catalog.Format(msgs.locale, "searchSearching", nil)
+}
+
+// SearchReadingFolder says "Reading the folder…"
+// in the language the app shows.
+func SearchReadingFolder() string { return In(i18n.Locale()).SearchReadingFolder() }
+
+// SearchReadingFolder says "Reading the folder…"
+// in the language of msgs.
+func (msgs Messages) SearchReadingFolder() string {
+	return Catalog.Format(msgs.locale, "searchReadingFolder", nil)
+}
+
+// SearchReadingDrives says "Still reading the drives: more may turn up"
+// in the language the app shows.
+func SearchReadingDrives() string { return In(i18n.Locale()).SearchReadingDrives() }
+
+// SearchReadingDrives says "Still reading the drives: more may turn up"
+// in the language of msgs.
+func (msgs Messages) SearchReadingDrives() string {
+	return Catalog.Format(msgs.locale, "searchReadingDrives", nil)
+}
+
+// SearchResults says "{count, plural, one {# result} other {# results}}"
+// in the language the app shows.
+func SearchResults(count int) string { return In(i18n.Locale()).SearchResults(count) }
+
+// SearchResults says "{count, plural, one {# result} other {# results}}"
+// in the language of msgs.
+func (msgs Messages) SearchResults(count int) string {
+	return Catalog.Format(msgs.locale, "searchResults", map[string]any{"count": count})
+}
+
+// SearchResultsOf says "{count, number} of {total, plural, one {# result} other {# results}}"
+// in the language the app shows.
+func SearchResultsOf(count int, total int) string {
+	return In(i18n.Locale()).SearchResultsOf(count, total)
+}
+
+// SearchResultsOf says "{count, number} of {total, plural, one {# result} other {# results}}"
+// in the language of msgs.
+func (msgs Messages) SearchResultsOf(count int, total int) string {
+	return Catalog.Format(msgs.locale, "searchResultsOf", map[string]any{"count": count, "total": total})
+}
+
+// SearchShowAll says "Show more"
+// in the language the app shows.
+func SearchShowAll() string { return In(i18n.Locale()).SearchShowAll() }
+
+// SearchShowAll says "Show more"
+// in the language of msgs.
+func (msgs Messages) SearchShowAll() string {
+	return Catalog.Format(msgs.locale, "searchShowAll", nil)
+}
+
+// SearchUnknownToken says "A filter after “:” is not one MyFiles knows"
+// in the language the app shows.
+func SearchUnknownToken() string { return In(i18n.Locale()).SearchUnknownToken() }
+
+// SearchUnknownToken says "A filter after “:” is not one MyFiles knows"
+// in the language of msgs.
+func (msgs Messages) SearchUnknownToken() string {
+	return Catalog.Format(msgs.locale, "searchUnknownToken", nil)
+}
+
+// ColumnFolder says "Folder"
+// in the language the app shows.
+func ColumnFolder() string { return In(i18n.Locale()).ColumnFolder() }
+
+// ColumnFolder says "Folder"
+// in the language of msgs.
+func (msgs Messages) ColumnFolder() string {
+	return Catalog.Format(msgs.locale, "columnFolder", nil)
+}
+
+// MenuOpenLocation says "Open File Location"
+// in the language the app shows.
+func MenuOpenLocation() string { return In(i18n.Locale()).MenuOpenLocation() }
+
+// MenuOpenLocation says "Open File Location"
+// in the language of msgs.
+func (msgs Messages) MenuOpenLocation() string {
+	return Catalog.Format(msgs.locale, "menuOpenLocation", nil)
+}
+
+// KindAll says "All"
+// in the language the app shows.
+func KindAll() string { return In(i18n.Locale()).KindAll() }
+
+// KindAll says "All"
+// in the language of msgs.
+func (msgs Messages) KindAll() string {
+	return Catalog.Format(msgs.locale, "kindAll", nil)
+}
+
+// KindFolders says "Folders"
+// in the language the app shows.
+func KindFolders() string { return In(i18n.Locale()).KindFolders() }
+
+// KindFolders says "Folders"
+// in the language of msgs.
+func (msgs Messages) KindFolders() string {
+	return Catalog.Format(msgs.locale, "kindFolders", nil)
+}
+
+// KindDocuments says "Documents"
+// in the language the app shows.
+func KindDocuments() string { return In(i18n.Locale()).KindDocuments() }
+
+// KindDocuments says "Documents"
+// in the language of msgs.
+func (msgs Messages) KindDocuments() string {
+	return Catalog.Format(msgs.locale, "kindDocuments", nil)
+}
+
+// KindImages says "Pictures"
+// in the language the app shows.
+func KindImages() string { return In(i18n.Locale()).KindImages() }
+
+// KindImages says "Pictures"
+// in the language of msgs.
+func (msgs Messages) KindImages() string {
+	return Catalog.Format(msgs.locale, "kindImages", nil)
+}
+
+// KindVideo says "Video"
+// in the language the app shows.
+func KindVideo() string { return In(i18n.Locale()).KindVideo() }
+
+// KindVideo says "Video"
+// in the language of msgs.
+func (msgs Messages) KindVideo() string {
+	return Catalog.Format(msgs.locale, "kindVideo", nil)
+}
+
+// KindAudio says "Audio"
+// in the language the app shows.
+func KindAudio() string { return In(i18n.Locale()).KindAudio() }
+
+// KindAudio says "Audio"
+// in the language of msgs.
+func (msgs Messages) KindAudio() string {
+	return Catalog.Format(msgs.locale, "kindAudio", nil)
+}
+
+// KindArchives says "Archives"
+// in the language the app shows.
+func KindArchives() string { return In(i18n.Locale()).KindArchives() }
+
+// KindArchives says "Archives"
+// in the language of msgs.
+func (msgs Messages) KindArchives() string {
+	return Catalog.Format(msgs.locale, "kindArchives", nil)
+}
+
+// KindPrograms says "Programs"
+// in the language the app shows.
+func KindPrograms() string { return In(i18n.Locale()).KindPrograms() }
+
+// KindPrograms says "Programs"
+// in the language of msgs.
+func (msgs Messages) KindPrograms() string {
+	return Catalog.Format(msgs.locale, "kindPrograms", nil)
+}
+
+// SettingsSearch says "Search"
+// in the language the app shows.
+func SettingsSearch() string { return In(i18n.Locale()).SettingsSearch() }
+
+// SettingsSearch says "Search"
+// in the language of msgs.
+func (msgs Messages) SettingsSearch() string {
+	return Catalog.Format(msgs.locale, "settingsSearch", nil)
+}
+
+// SettingsSearchFuzzy says "Match letters scattered in a name"
+// in the language the app shows.
+func SettingsSearchFuzzy() string { return In(i18n.Locale()).SettingsSearchFuzzy() }
+
+// SettingsSearchFuzzy says "Match letters scattered in a name"
+// in the language of msgs.
+func (msgs Messages) SettingsSearchFuzzy() string {
+	return Catalog.Format(msgs.locale, "settingsSearchFuzzy", nil)
+}
+
+// SettingsSearchFuzzyHint says "“rdm” finds readme.md. Turned off, a word must be in the name as typed; put ' before a word to flip it for that w…"
+// in the language the app shows.
+func SettingsSearchFuzzyHint() string { return In(i18n.Locale()).SettingsSearchFuzzyHint() }
+
+// SettingsSearchFuzzyHint says "“rdm” finds readme.md. Turned off, a word must be in the name as typed; put ' before a word to flip it for that w…"
+// in the language of msgs.
+func (msgs Messages) SettingsSearchFuzzyHint() string {
+	return Catalog.Format(msgs.locale, "settingsSearchFuzzyHint", nil)
+}
+
+// SettingsSearchPinyin says "Find Chinese names by pinyin"
+// in the language the app shows.
+func SettingsSearchPinyin() string { return In(i18n.Locale()).SettingsSearchPinyin() }
+
+// SettingsSearchPinyin says "Find Chinese names by pinyin"
+// in the language of msgs.
+func (msgs Messages) SettingsSearchPinyin() string {
+	return Catalog.Format(msgs.locale, "settingsSearchPinyin", nil)
+}
+
+// SettingsSearchOrFirst says "“|” binds tighter than a space"
+// in the language the app shows.
+func SettingsSearchOrFirst() string { return In(i18n.Locale()).SettingsSearchOrFirst() }
+
+// SettingsSearchOrFirst says "“|” binds tighter than a space"
+// in the language of msgs.
+func (msgs Messages) SettingsSearchOrFirst() string {
+	return Catalog.Format(msgs.locale, "settingsSearchOrFirst", nil)
+}
+
+// SettingsSearchOrFirstHint says "“a | b c” then means (a or b) and c, where it otherwise means a or (b and c)."
+// in the language the app shows.
+func SettingsSearchOrFirstHint() string { return In(i18n.Locale()).SettingsSearchOrFirstHint() }
+
+// SettingsSearchOrFirstHint says "“a | b c” then means (a or b) and c, where it otherwise means a or (b and c)."
+// in the language of msgs.
+func (msgs Messages) SettingsSearchOrFirstHint() string {
+	return Catalog.Format(msgs.locale, "settingsSearchOrFirstHint", nil)
+}
+
+// SettingsSearchHistory says "Put files opened from results before the others"
+// in the language the app shows.
+func SettingsSearchHistory() string { return In(i18n.Locale()).SettingsSearchHistory() }
+
+// SettingsSearchHistory says "Put files opened from results before the others"
+// in the language of msgs.
+func (msgs Messages) SettingsSearchHistory() string {
+	return Catalog.Format(msgs.locale, "settingsSearchHistory", nil)
+}
+
+// SettingsIndex says "Index"
+// in the language the app shows.
+func SettingsIndex() string { return In(i18n.Locale()).SettingsIndex() }
+
+// SettingsIndex says "Index"
+// in the language of msgs.
+func (msgs Messages) SettingsIndex() string {
+	return Catalog.Format(msgs.locale, "settingsIndex", nil)
+}
+
+// SettingsIndexOn says "Keep an index of file names for instant search"
+// in the language the app shows.
+func SettingsIndexOn() string { return In(i18n.Locale()).SettingsIndexOn() }
+
+// SettingsIndexOn says "Keep an index of file names for instant search"
+// in the language of msgs.
+func (msgs Messages) SettingsIndexOn() string {
+	return Catalog.Format(msgs.locale, "settingsIndexOn", nil)
+}
+
+// SettingsIndexHint says "Drives are followed as they change: NTFS drives by their journal, which also tells what changed while MyFiles was clo…"
+// in the language the app shows.
+func SettingsIndexHint() string { return In(i18n.Locale()).SettingsIndexHint() }
+
+// SettingsIndexHint says "Drives are followed as they change: NTFS drives by their journal, which also tells what changed while MyFiles was clo…"
+// in the language of msgs.
+func (msgs Messages) SettingsIndexHint() string {
+	return Catalog.Format(msgs.locale, "settingsIndexHint", nil)
+}
+
+// SettingsIndexRebuild says "Read Again"
+// in the language the app shows.
+func SettingsIndexRebuild() string { return In(i18n.Locale()).SettingsIndexRebuild() }
+
+// SettingsIndexRebuild says "Read Again"
+// in the language of msgs.
+func (msgs Messages) SettingsIndexRebuild() string {
+	return Catalog.Format(msgs.locale, "settingsIndexRebuild", nil)
+}
+
+// SettingsIndexRebuildAll says "Read All Again"
+// in the language the app shows.
+func SettingsIndexRebuildAll() string { return In(i18n.Locale()).SettingsIndexRebuildAll() }
+
+// SettingsIndexRebuildAll says "Read All Again"
+// in the language of msgs.
+func (msgs Messages) SettingsIndexRebuildAll() string {
+	return Catalog.Format(msgs.locale, "settingsIndexRebuildAll", nil)
+}
+
+// SettingsIndexFast says "Read NTFS Drives the Fast Way…"
+// in the language the app shows.
+func SettingsIndexFast() string { return In(i18n.Locale()).SettingsIndexFast() }
+
+// SettingsIndexFast says "Read NTFS Drives the Fast Way…"
+// in the language of msgs.
+func (msgs Messages) SettingsIndexFast() string {
+	return Catalog.Format(msgs.locale, "settingsIndexFast", nil)
+}
+
+// SettingsIndexFastHint says "Reads the drives' file tables in seconds, which needs an administrator's rights once: Windows will ask. Without it th…"
+// in the language the app shows.
+func SettingsIndexFastHint() string { return In(i18n.Locale()).SettingsIndexFastHint() }
+
+// SettingsIndexFastHint says "Reads the drives' file tables in seconds, which needs an administrator's rights once: Windows will ask. Without it th…"
+// in the language of msgs.
+func (msgs Messages) SettingsIndexFastHint() string {
+	return Catalog.Format(msgs.locale, "settingsIndexFastHint", nil)
+}
+
+// SettingsIndexDeclined says "Not read the fast way: the request was declined"
+// in the language the app shows.
+func SettingsIndexDeclined() string { return In(i18n.Locale()).SettingsIndexDeclined() }
+
+// SettingsIndexDeclined says "Not read the fast way: the request was declined"
+// in the language of msgs.
+func (msgs Messages) SettingsIndexDeclined() string {
+	return Catalog.Format(msgs.locale, "settingsIndexDeclined", nil)
+}
+
+// IndexOff says "Not indexed"
+// in the language the app shows.
+func IndexOff() string { return In(i18n.Locale()).IndexOff() }
+
+// IndexOff says "Not indexed"
+// in the language of msgs.
+func (msgs Messages) IndexOff() string {
+	return Catalog.Format(msgs.locale, "indexOff", nil)
+}
+
+// IndexLoading says "Loading…"
+// in the language the app shows.
+func IndexLoading() string { return In(i18n.Locale()).IndexLoading() }
+
+// IndexLoading says "Loading…"
+// in the language of msgs.
+func (msgs Messages) IndexLoading() string {
+	return Catalog.Format(msgs.locale, "indexLoading", nil)
+}
+
+// IndexReading says "Reading… {count, number} files"
+// in the language the app shows.
+func IndexReading(count int) string { return In(i18n.Locale()).IndexReading(count) }
+
+// IndexReading says "Reading… {count, number} files"
+// in the language of msgs.
+func (msgs Messages) IndexReading(count int) string {
+	return Catalog.Format(msgs.locale, "indexReading", map[string]any{"count": count})
+}
+
+// IndexReady says "{count, number} files"
+// in the language the app shows.
+func IndexReady(count int) string { return In(i18n.Locale()).IndexReady(count) }
+
+// IndexReady says "{count, number} files"
+// in the language of msgs.
+func (msgs Messages) IndexReady(count int) string {
+	return Catalog.Format(msgs.locale, "indexReady", map[string]any{"count": count})
+}
+
+// IndexRefreshing says "{count, number} files · reading again…"
+// in the language the app shows.
+func IndexRefreshing(count int) string { return In(i18n.Locale()).IndexRefreshing(count) }
+
+// IndexRefreshing says "{count, number} files · reading again…"
+// in the language of msgs.
+func (msgs Messages) IndexRefreshing(count int) string {
+	return Catalog.Format(msgs.locale, "indexRefreshing", map[string]any{"count": count})
+}
+
+// IndexFailed says "Could not be read: {error}"
+// in the language the app shows.
+func IndexFailed(error string) string { return In(i18n.Locale()).IndexFailed(error) }
+
+// IndexFailed says "Could not be read: {error}"
+// in the language of msgs.
+func (msgs Messages) IndexFailed(error string) string {
+	return Catalog.Format(msgs.locale, "indexFailed", map[string]any{"error": error})
+}
+
+// IndexLive says "follows changes"
+// in the language the app shows.
+func IndexLive() string { return In(i18n.Locale()).IndexLive() }
+
+// IndexLive says "follows changes"
+// in the language of msgs.
+func (msgs Messages) IndexLive() string {
+	return Catalog.Format(msgs.locale, "indexLive", nil)
+}
+
+// IndexTable says "file table"
+// in the language the app shows.
+func IndexTable() string { return In(i18n.Locale()).IndexTable() }
+
+// IndexTable says "file table"
+// in the language of msgs.
+func (msgs Messages) IndexTable() string {
+	return Catalog.Format(msgs.locale, "indexTable", nil)
+}
+
+// IndexWalked says "folder by folder"
+// in the language the app shows.
+func IndexWalked() string { return In(i18n.Locale()).IndexWalked() }
+
+// IndexWalked says "folder by folder"
+// in the language of msgs.
+func (msgs Messages) IndexWalked() string {
+	return Catalog.Format(msgs.locale, "indexWalked", nil)
+}
+
+// IndexTook says "read in {seconds} s"
+// in the language the app shows.
+func IndexTook(seconds string) string { return In(i18n.Locale()).IndexTook(seconds) }
+
+// IndexTook says "read in {seconds} s"
+// in the language of msgs.
+func (msgs Messages) IndexTook(seconds string) string {
+	return Catalog.Format(msgs.locale, "indexTook", map[string]any{"seconds": seconds})
+}
+
+// SettingsRules says "Rules"
+// in the language the app shows.
+func SettingsRules() string { return In(i18n.Locale()).SettingsRules() }
+
+// SettingsRules says "Rules"
+// in the language of msgs.
+func (msgs Messages) SettingsRules() string {
+	return Catalog.Format(msgs.locale, "settingsRules", nil)
+}
+
+// SettingsRulesHint says "One a line. A path (D:\\Cache, %TEMP%), a name or pattern (node_modules, *.tmp, build\\out, **\\obj\\**), or /a regular e…"
+// in the language the app shows.
+func SettingsRulesHint() string { return In(i18n.Locale()).SettingsRulesHint() }
+
+// SettingsRulesHint says "One a line. A path (D:\\Cache, %TEMP%), a name or pattern (node_modules, *.tmp, build\\out, **\\obj\\**), or /a regular e…"
+// in the language of msgs.
+func (msgs Messages) SettingsRulesHint() string {
+	return Catalog.Format(msgs.locale, "settingsRulesHint", nil)
+}
+
+// SettingsRulesApply says "Apply"
+// in the language the app shows.
+func SettingsRulesApply() string { return In(i18n.Locale()).SettingsRulesApply() }
+
+// SettingsRulesApply says "Apply"
+// in the language of msgs.
+func (msgs Messages) SettingsRulesApply() string {
+	return Catalog.Format(msgs.locale, "settingsRulesApply", nil)
+}
+
+// SettingsRulesDefaults says "Defaults"
+// in the language the app shows.
+func SettingsRulesDefaults() string { return In(i18n.Locale()).SettingsRulesDefaults() }
+
+// SettingsRulesDefaults says "Defaults"
+// in the language of msgs.
+func (msgs Messages) SettingsRulesDefaults() string {
+	return Catalog.Format(msgs.locale, "settingsRulesDefaults", nil)
+}
+
+// SettingsFilters says "Kinds of Files"
+// in the language the app shows.
+func SettingsFilters() string { return In(i18n.Locale()).SettingsFilters() }
+
+// SettingsFilters says "Kinds of Files"
+// in the language of msgs.
+func (msgs Messages) SettingsFilters() string {
+	return Catalog.Format(msgs.locale, "settingsFilters", nil)
+}
+
+// SettingsFiltersHint says "One a line: keyword = what it lets through. Extensions (pdf docx), patterns (*.min.js), folder or file, and other key…"
+// in the language the app shows.
+func SettingsFiltersHint() string { return In(i18n.Locale()).SettingsFiltersHint() }
+
+// SettingsFiltersHint says "One a line: keyword = what it lets through. Extensions (pdf docx), patterns (*.min.js), folder or file, and other key…"
+// in the language of msgs.
+func (msgs Messages) SettingsFiltersHint() string {
+	return Catalog.Format(msgs.locale, "settingsFiltersHint", nil)
+}
+
+// SearchContentHint says "Type words to find inside files"
+// in the language the app shows.
+func SearchContentHint() string { return In(i18n.Locale()).SearchContentHint() }
+
+// SearchContentHint says "Type words to find inside files"
+// in the language of msgs.
+func (msgs Messages) SearchContentHint() string {
+	return Catalog.Format(msgs.locale, "searchContentHint", nil)
+}
+
+// SearchContentReading says "Reading files: {read} of {total}"
+// in the language the app shows.
+func SearchContentReading(read string, total string) string {
+	return In(i18n.Locale()).SearchContentReading(read, total)
+}
+
+// SearchContentReading says "Reading files: {read} of {total}"
+// in the language of msgs.
+func (msgs Messages) SearchContentReading(read string, total string) string {
+	return Catalog.Format(msgs.locale, "searchContentReading", map[string]any{"read": read, "total": total})
+}
+
+// SettingsContent says "Search Inside Files"
+// in the language the app shows.
+func SettingsContent() string { return In(i18n.Locale()).SettingsContent() }
+
+// SettingsContent says "Search Inside Files"
+// in the language of msgs.
+func (msgs Messages) SettingsContent() string {
+	return Catalog.Format(msgs.locale, "settingsContent", nil)
+}
+
+// SettingsContentOn says "Search inside files with a keyword"
+// in the language the app shows.
+func SettingsContentOn() string { return In(i18n.Locale()).SettingsContentOn() }
+
+// SettingsContentOn says "Search inside files with a keyword"
+// in the language of msgs.
+func (msgs Messages) SettingsContentOn() string {
+	return Catalog.Format(msgs.locale, "settingsContentOn", nil)
+}
+
+// SettingsContentKeyword says "Keyword"
+// in the language the app shows.
+func SettingsContentKeyword() string { return In(i18n.Locale()).SettingsContentKeyword() }
+
+// SettingsContentKeyword says "Keyword"
+// in the language of msgs.
+func (msgs Messages) SettingsContentKeyword() string {
+	return Catalog.Format(msgs.locale, "settingsContentKeyword", nil)
+}
+
+// SettingsContentExts says "Kinds of files read"
+// in the language the app shows.
+func SettingsContentExts() string { return In(i18n.Locale()).SettingsContentExts() }
+
+// SettingsContentExts says "Kinds of files read"
+// in the language of msgs.
+func (msgs Messages) SettingsContentExts() string {
+	return Catalog.Format(msgs.locale, "settingsContentExts", nil)
+}
+
+// SettingsContentHint says "Type the keyword, a space, and words: files under the folder that hold every word are found, with the text around the…"
+// in the language the app shows.
+func SettingsContentHint() string { return In(i18n.Locale()).SettingsContentHint() }
+
+// SettingsContentHint says "Type the keyword, a space, and words: files under the folder that hold every word are found, with the text around the…"
+// in the language of msgs.
+func (msgs Messages) SettingsContentHint() string {
+	return Catalog.Format(msgs.locale, "settingsContentHint", nil)
+}
+
+// SearchProgram says "App"
+// in the language the app shows.
+func SearchProgram() string { return In(i18n.Locale()).SearchProgram() }
+
+// SearchProgram says "App"
+// in the language of msgs.
+func (msgs Messages) SearchProgram() string {
+	return Catalog.Format(msgs.locale, "searchProgram", nil)
+}
+
+// SearchSetting says "System setting"
+// in the language the app shows.
+func SearchSetting() string { return In(i18n.Locale()).SearchSetting() }
+
+// SearchSetting says "System setting"
+// in the language of msgs.
+func (msgs Messages) SearchSetting() string {
+	return Catalog.Format(msgs.locale, "searchSetting", nil)
+}
+
+// SettingsSearchPrograms says "Find apps and system settings when searching the whole computer"
+// in the language the app shows.
+func SettingsSearchPrograms() string { return In(i18n.Locale()).SettingsSearchPrograms() }
+
+// SettingsSearchPrograms says "Find apps and system settings when searching the whole computer"
+// in the language of msgs.
+func (msgs Messages) SettingsSearchPrograms() string {
+	return Catalog.Format(msgs.locale, "settingsSearchPrograms", nil)
+}

@@ -271,8 +271,8 @@ func (w *Window) closeTab(id workspace.TabID) {
 	if t == nil {
 		return
 	}
-	if t.Path != "" {
-		w.reopen = append(w.reopen, t.Path)
+	if t.place() != "" {
+		w.reopen = append(w.reopen, t.place())
 	}
 	w.release(t)
 	delete(w.tabs, id)
@@ -292,6 +292,9 @@ func (w *Window) release(t *Tab) {
 	if t.cancel != nil {
 		t.cancel()
 		t.cancel = nil
+	}
+	if t.find != nil && t.find.stop != nil {
+		t.find.stop()
 	}
 	if t.unwatch != nil {
 		t.unwatch()
@@ -350,7 +353,7 @@ func (w *Window) splitCurrent(zone workspace.Zone) {
 	if p == nil || t == nil || t.settings {
 		return
 	}
-	id := w.newTab(p.ID, t.Path, "")
+	id := w.newTab(p.ID, t.place(), "")
 	w.layout.Split(p.ID, id, zone)
 	w.changed()
 }
@@ -398,7 +401,7 @@ func (w *Window) save() {
 	s := config.Session{Layout: w.layout}
 	for _, id := range w.layout.Tabs() {
 		if t := w.tabs[id]; t != nil {
-			path := t.Path
+			path := t.place()
 			if t.settings {
 				path = settingsPath
 			}

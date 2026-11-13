@@ -21,14 +21,14 @@ func (w *Window) toolbar(c *ui.Context, p *workspace.Pane, t *Tab) {
 		if iconButton(c, "forward", icoForward, locales.NavForward()).Disabled(len(t.forward) == 0).Clicked() {
 			w.goForward(t)
 		}
-		if iconButton(c, "up", icoUp, locales.NavUp()).Disabled(t.Path == fsys.Computer).Clicked() {
+		if iconButton(c, "up", icoUp, locales.NavUp()).Disabled(t.Path == fsys.Computer && !t.searching()).Clicked() {
 			w.up(t)
 		}
 		if iconButton(c, "refresh", icoRefresh, locales.NavRefresh()).Clicked() {
 			w.reload(t)
 		}
 		w.address(c, t)
-		w.filterField(c, t)
+		w.searchField(c, t)
 		iconButton(c, "view", icoView, locales.View()).Menu(func(m *ui.Menu) { w.viewMenu(m, t) })
 	})
 }
@@ -98,7 +98,7 @@ func (w *Window) address(c *ui.Context, t *Tab) {
 		return
 	}
 
-	all := crumbsOf(t.Path)
+	all := crumbsOf(t.place())
 	// The components that fit, the deepest first to stay: those left
 	// out are behind an ellipsis. The room is the pane's address's in the
 	// last frame, whichever tab showed then: a new tab's first frame
@@ -204,26 +204,9 @@ func (w *Window) crumbButton(c *ui.Context, key any, name string, current bool) 
 // editAddress turns the address into a text input holding the path.
 func (w *Window) editAddress(t *Tab) {
 	t.editing, t.fresh = true, true
-	t.addr = t.Path
-	if !real(t.Path) {
+	t.addr = t.place()
+	if !real(t.addr) {
 		t.addr = ""
 	}
 	w.invalidate()
-}
-
-// filterField is the field that narrows the rows to the names holding
-// what is typed.
-func (w *Window) filterField(c *ui.Context, t *Tab) {
-	if t.Path == fsys.Computer {
-		return
-	}
-	in := ui.TextInput(c.Key("filter"), &t.filter).Placeholder(locales.Filter()).Label(locales.Filter()).
-		Width(150).Shrink(1).MinWidth(60).Height(controlSize).Padding(0, 6).TabStop(false).Bind(&t.filterRef)
-	switch {
-	case in.Shortcut(0, ui.KeyEscape):
-		t.filter = ""
-		t.wantFocus = true
-	case in.Submitted(), in.Shortcut(0, ui.KeyDown):
-		t.wantFocus = true
-	}
 }

@@ -54,6 +54,8 @@ func (w *Window) navigate(t *Tab, path string, mode navMode, focus string) {
 		})
 		return
 	}
+	// The folder takes the place of a search.
+	w.endSearchQuietly(t)
 	t.gen++
 	gen := t.gen
 	if t.cancel != nil {
@@ -224,7 +226,7 @@ func (w *Window) foresee(t *Tab) {
 	// the top rows to come first.
 	for row := first + n - 1; row >= first; row-- {
 		e := t.entry(row)
-		set.forEntry(t.Path, e)
+		set.forEntry(t.iconOf(t.view[row]))
 		if names {
 			a.icons.typeName(e)
 		}
@@ -280,6 +282,10 @@ func (w *Window) retreat(t *Tab) {
 // refresh reads the folder shown again, keeping the choice and the place.
 func (w *Window) refresh(t *Tab) {
 	if t.Path == "" {
+		return
+	}
+	if t.searching() {
+		w.search(t, true)
 		return
 	}
 	if t.loading {
@@ -437,6 +443,11 @@ func (a *App) renamed(from, to string) {
 
 // up goes to the folder holding the one shown, with it chosen there.
 func (w *Window) up(t *Tab) {
+	if t.searching() {
+		// From what was found, back to the folder.
+		w.endSearch(t)
+		return
+	}
 	if t.Path == fsys.Computer || t.Path == "" {
 		return
 	}
@@ -464,17 +475,32 @@ func (w *Window) goForward(t *Tab) {
 // program.
 func (w *Window) openEntry(t *Tab, e *fsys.Entry) {
 	path := t.pathOf(e)
+	dir := t.Path
+	if t.searching() {
+		// Opened from what was found: the next search has it sooner.
+		w.app.noteOpened(t.find, path)
+		if isProgram(path) {
+			owner := w.handle()
+			go func() {
+				if err := shell.Launch(owner, path); err != nil {
+					w.report(err)
+				}
+			}()
+			return
+		}
+		dir, _ = fsys.Parent(path)
+	}
 	if e.IsDir() {
 		w.navigate(t, path, navPush, "")
 		return
 	}
-	w.openFile(path, t.Path)
+	w.openFile(path, dir)
 }
 
 // goTo shows what the user typed in the address bar: a folder, or a
 // file, which is chosen in its folder.
 func (w *Window) goTo(t *Tab, text string) {
-	cwd := t.Path
+	cwd := t.place()
 	if !real(cwd) {
 		cwd = ""
 	}

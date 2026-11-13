@@ -43,6 +43,9 @@ type rowText struct {
 	modified  string
 	size      string
 	made      bool
+	// spans and dirSpans are a result's name and folder, lit where the
+	// query is in them.
+	spans, dirSpans []ui.Span
 }
 
 // Tab is a folder shown in a pane, with the way there and back.
@@ -53,6 +56,15 @@ type Tab struct {
 	// settings is set for the tab that shows the settings in place of a
 	// folder: it has no Path.
 	settings bool
+	// find is the search the tab shows in place of its folder, nil for
+	// none; Path is then searchPath. everywhere has the tab's searches be
+	// of the whole computer, caretEnd puts the caret after what was typed
+	// among the files, and textFocus tells that a text had the keyboard
+	// in the last frame.
+	find       *finding
+	everywhere bool
+	caretEnd   bool
+	textFocus  bool
 
 	// entries are the folder's, in the order read, and view the rows:
 	// indices into entries, filtered and sorted. text is parallel to
@@ -128,6 +140,14 @@ type Tab struct {
 	addr    string
 	// filterRef is the filter field, to focus it.
 	filterRef ui.Handle
+	// listFocus is set while the list of files has the keyboard, which
+	// takes what is typed as the search field would: composing is what an
+	// input method is composing there, shown in the field until it is
+	// done, and fieldAt where the field is in the window, for the input
+	// method's candidates to show under it.
+	listFocus bool
+	composing string
+	fieldAt   ui.Rect
 	// wantFocus gives the rows the keyboard once they are built.
 	wantFocus bool
 	// rename is the name of the entry to start renaming once it shows.
@@ -165,6 +185,15 @@ func (t *Tab) title() string {
 	if t.settings {
 		return locales.Settings()
 	}
+	if t.searching() {
+		return locales.SearchTitle(strings.TrimSpace(t.filter))
+	}
+	return placeTitle(t.Path)
+}
+
+// placeTitle is what a folder, or a place that is none, is called.
+func placeTitle(path string) string {
+	t := &Tab{Path: path}
 	if t.Path == fsys.Computer {
 		return locales.ThisPC()
 	}
@@ -175,16 +204,53 @@ func (t *Tab) title() string {
 	return treeName(t.Path)
 }
 
+// iconOf is the folder and the entry an entry's icon is asked by: for
+// what a search found, the folder it is in and its name there.
+func (t *Tab) iconOf(i int32) (string, *fsys.Entry) {
+	e := &t.entries[i]
+	if !t.searching() {
+		return t.Path, e
+	}
+	r := t.result(i)
+	named := *e
+	if isProgram(r.Path) {
+		// A program's icon is asked by what the system knows it by, as
+		// a drive's is.
+		return fsys.Computer, &named
+	}
+	named.Name = r.Name
+	return resultDir(r), &named
+}
+
+// place is the folder the tab is at: the one searched from, while a
+// search shows.
+func (t *Tab) place() string {
+	if t.find != nil {
+		return t.find.origin
+	}
+	return t.Path
+}
+
 // entry is the entry of a row.
 func (t *Tab) entry(row int) *fsys.Entry { return &t.entries[t.view[row]] }
 
 // pathOf is the path of an entry of the folder shown.
 func (t *Tab) pathOf(e *fsys.Entry) string {
-	if t.Path == fsys.Computer || t.bin() {
-		// A drive's root, or where the Recycle Bin keeps the item.
+	if t.Path == fsys.Computer || t.bin() || t.searching() {
+		// A drive's root, where the Recycle Bin keeps the item, or what a
+		// search found.
 		return e.Name
 	}
 	return fsys.Join(t.Path, e.Name)
+}
+
+// nameOfPath is what the tab calls the entry of a path: its name in the
+// folder, or, of what a search found, the path itself.
+func (t *Tab) nameOfPath(path string) string {
+	if t.searching() {
+		return path
+	}
+	return fsys.Base(path)
 }
 
 // rowOf is the row showing the entry of a name, -1 when none does.
@@ -214,9 +280,12 @@ func (t *Tab) chosen() []*fsys.Entry {
 // chosenPaths lists the paths of the entries chosen, in the order shown.
 func (t *Tab) chosenPaths() []string {
 	entries := t.chosen()
-	paths := make([]string, len(entries))
-	for i, e := range entries {
-		paths[i] = t.pathOf(e)
+	paths := make([]string, 0, len(entries))
+	for _, e := range entries {
+		// A program found is no file: nothing is done with it but open it.
+		if path := t.pathOf(e); !t.searching() || !isProgram(path) {
+			paths = append(paths, path)
+		}
 	}
 	return paths
 }
@@ -305,7 +374,10 @@ func buildView(entries []fsys.Entry, showHidden bool, filter string, o fsys.Orde
 // review makes the rows again from the entries the tab has, as after the
 // filter or the order changed, keeping the choice.
 func (t *Tab) review(showHidden, dirsFirst bool) {
-	if t.Path == fsys.Computer {
+	if t.searching() {
+		t.findView()
+		t.hidden = 0
+	} else if t.Path == fsys.Computer {
 		t.view = fsys.All(t.entries)
 		t.hidden = 0
 	} else if t.bin() {

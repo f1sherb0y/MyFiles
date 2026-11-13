@@ -115,3 +115,105 @@ bin\expbench.exe -compare out\myfiles.json out\explorerpp.json -startup out\myfi
 要测的文件夹列在 `tools\bench-folders.txt`，一行一个，可以换成你自己常去的。`MYFILES_TRACE=1` 让 MyFiles 把每次导航各阶段的耗时打到标准错误上。
 
 日常使用时，每个窗格状态栏右边的数字就是这个文件夹从请求到显示用的时间。
+
+## 搜索
+
+2026-11-13，Ryzen AI 9 HX 370（24 线程）、NVMe、Windows 11 26300。索引的设计见 [design.md](design.md#搜索)。
+
+### 读盘和建索引
+
+`tools/idxbench` 读一个盘、建索引、存盘，再跑查询：
+
+```powershell
+go build -o out\idxbench.exe .\tools\idxbench
+out\idxbench.exe -root D:\ -save out\idx report rdme      # 逐个文件夹读（不需要管理员）
+out\idxbench.exe -root D:\ -mft -save out\idx report      # 读 MFT（在管理员终端里跑）
+out\idxbench.exe -root D:\ -save out\idx -load -limit 1000 report   # 映射已存的索引，不读盘
+out\idxbench.exe -root D:\ -save out\idx -load -rest report           # 每次搜索前把索引的页交还系统：停手之后第一次搜索的耗时
+out\idxbench.exe -root D:\ -paths -save out\idx report                # 像没有文件编号的文件系统那样按路径读
+```
+
+每一步之后它打印进程的内存：私有的（专用工作集，任务管理器显示的那个数，5 毫秒采样一次的最高值）、提交的、整个工作集。
+
+| 盘 | 文件数 | 读 MFT | 逐个文件夹 | 建索引（直接建在文件里，含刷盘） | 再次启动时映射 |
+|---|---|---|---|---|---|
+| D:（NTFS） | 236 万 | 1.35 s | 2.0–2.6 s | 0.67–0.76 s，179 MB | 0.5–1.1 ms |
+| C:（NTFS，MFT 3.7 GB） | 277 万 | 5.3 s | 17–29 s | 1.1 s，219 MB | |
+| G:（第三方驱动挂的 EXT4） | 约 400 万 | — | 约 3 分钟（2.5 万个/秒） | 305 MB | |
+| F:（同上） | 约 750 万 | — | 约 4.5 分钟 | 574 MB | |
+
+读 MFT 的数字是提权跑的（一次 UAC），而且是索引改成建在文件里之前测的；改了之后没有再提权跑过真盘（UAC 没有人点），这条路现在由合成卷的测试 `TestScanTable` 覆盖，它走的是同一套临时文件和建文件的代码。C 盘逐个文件夹读比 MFT 少 8.7 万个条目，是当前用户无权列出的文件夹里的。
+
+内存，`idxbench` 读 D 盘并建索引的整个过程：私有内存最高 13 MB，工作集最高 108 MB（其中是临时文件和索引文件的映射）；映射之后按规则标记完，私有 12 MB。索引改成建在文件里之前，同一过程要几百 MB 的堆。程序本身在真实窗口里的内存见 [design.md](design.md#实测)。
+
+按规则给 236 万行算标记（`go test ./internal/index -bench Mark`，`MYFILES_INDEX_FILE` 指向一个真的索引文件）：35 ms，分配 2.4 MB。
+
+程序自己的提权读盘（设置里的按钮，`myfiles --index-helper`）也实际跑过一次：D:、E: 两个盘，退出码 0，写出的索引能映射、能搜。
+
+### 查询
+
+D 盘，236 万行，24 线程，各跑 60–100 次取中位数，包含取前 N 条并拼出路径：
+
+| 查询 | 匹配数 | 取前 1000 条 | 取前 10000 条 |
+|---|---|---|---|
+| `report` | 15,481 | 4.6 ms | 10.8 ms |
+| `rdme`（模糊） | 34,995 | 5.1 ms | 19.2 ms |
+| `.pdf$` | 4,913 | 2.8 ms | 5.5 ms |
+| `'report`（原样） | 1,867 | | 3.4 ms |
+| `main go`（两个词，带上级文件夹匹配） | 21,173 | 12.0 ms | 16.8 ms |
+| `src\main`（路径） | 16,096 | | 11.6 ms |
+| `cq`（含拼音） | 18,893 | | 11.9 ms |
+| `e`（一个字母，最坏情况） | 1,158,639 | 34.8 ms | 45.8 ms |
+
+取前 10000 条时大半时间花在给结果拼路径和同分排序上（`report`：扫描 3.7 ms，出结果 7.2 ms）。界面一次取 2000 条。
+
+上表是页都在内存里时的数字。10 秒没有搜索，索引的页会交还给系统；之后的第一次搜索要把页调回来（`-rest`）：`report` 12 ms（成批预取之前是 60 ms 上下），`e` 46 ms。
+
+### 和 Lertaro 在同一台机器上比
+
+Lertaro 自己的性能测试（`Tests/Core/IndexV2/Search/SearchPerformanceWorkloadTests.cs`）用的是合成数据：Z 盘上 100 个文件夹 `Archive000`…`Archive099`，6 万个文件 `report-000000.txt`…，每个文件夹 600 个，每第 10 个是 `.md`。它跑 6 个查询，各预热 3 次、测 10 次。把它的源码在这台机器上编出来跑（.NET SDK 10.0.401，Release，`DOTNET_TieredCompilation=0`）：
+
+```powershell
+$env:DOTNET_TieredCompilation = '0'
+dotnet build D:\Code\_ref\lertaro-src\Tests\Core\Core.csproj -c Release --artifacts-path out\lertaro-artifacts
+dotnet test  D:\Code\_ref\lertaro-src\Tests\Core\Core.csproj -c Release --no-build --artifacts-path out\lertaro-artifacts `
+    --filter "TestCategory=SearchPerformance" --logger "console;verbosity=detailed"      # 输出里的 SEARCH_PERF 行
+```
+
+MyFiles 这边，`internal/index/workload_test.go` 造一模一样的数据、跑一模一样的查询、限制和筛选：
+
+```powershell
+go test ./internal/index -run xxx -bench LertaroWorkload -benchtime 1000x -count 3
+```
+
+2026-11-13，同一台机器（Ryzen AI 9 HX 370，24 线程），中位数：
+
+| 查询（6 万个文件） | Lertaro | MyFiles |
+|---|---|---|
+| `report`，取 204 条，第一次 | 5.67 ms | 1.2 ms |
+| `report`，取 204 条，同样的再搜一次 | 0.003 ms | 0.0001 ms |
+| `report`，全部 6 万条 | 48.1 ms | 6.9 ms |
+| `archive report`，全部 | 66.1 ms | 11.6 ms |
+| `archive\report`，全部 | 76.7 ms | 7.2 ms |
+| `archive\report`，取 204 条，只要 `*.txt`，第一次 | 10.0 ms | 1.3 ms |
+| `z:\archive000\`，取 204 条，只要 `*.txt`，第一次 | 0.088 ms | 0.042 ms |
+
+Lertaro 的测试对取 204 条的查询量到的是它的结果页缓存命中（0.003 ms），第一次的数字取自它的 `query-page-cache` 场景的 `coldMs`；带筛选的那一条它没有缓存命中，10.0 ms 是每次都算。MyFiles 的「第一次」是每次搜索前让缓存失效量出来的。
+
+**这次对比改出来的东西。** 第一次照它的数据跑，MyFiles 在「全部 6 万条」上是 105 ms，比它的 48 ms 慢一倍多，取 204 条也要 4 ms。原因有三个，都改了：行数少时整个区间只切成两块，24 个核只用上两个（现在按行数切，每个核都有活干）；6 万条同分的结果按名称的自然顺序排，比较函数逐字符解码，而且排序搬的是 88 字节的结果本身（现在 ASCII 名称走字节比较，排的是下标，上万条时分块并行排再归并）；给结果拼路径是单线程的（现在分段并行）。之前拿来和它文档里的数字比的那组数据（15 个词轮换的名称，只有十五分之一匹配）恰好绕开了这几个问题。
+
+仓库里原有的 `BenchmarkSearch`（`go test ./internal/index -bench Search`）用的是名称更多样的数据，对着的是 Lertaro 文档里它作者机器上（12 逻辑处理器的 Intel）的数字，不是同台对比：
+
+| | Lertaro（它的机器，它的数据） | MyFiles，24 线程 | 限制成 12 线程 | 限制成 1 线程 |
+|---|---|---|---|---|
+| `report`，取 204 条 | 10.4–10.6 ms | 0.43 ms | 0.44 ms | 1.29 ms |
+| `report`，全部 7432 条 | 94.6–101.8 ms | 3.3 ms | 3.5 ms | 4.2 ms |
+| 带文件夹的路径查询，取 204 条 | 13.8–14.9 ms | 0.51 ms | 0.46 ms | 1.26 ms |
+
+同一个基准放大到 600 万个文件：`report` 取 204 条 16.8 ms（单线程 133 ms）。这些都是每次搜索前让结果缓存失效量的。
+
+### 跟进变化
+
+`MYFILES_INDEX_LIVE_TEST=1 go test ./internal/index -run TestFollowDrive`（会读整个盘）：在真实的 D 盘上新建、改名、文件夹改名、文件夹移动、删除，每一步之后搜索结果都跟上；关掉管理器、在它背后改文件、再启动，从存盘的索引加日志追上来用了 17 ms，没有重读盘。`go test ./internal/app -run TestSearchFollowsTheDrive` 在界面里做同样的事：显示着的结果自己更新。
+
+读整段日志（35 MB，30 万条记录）不提权 57 ms。

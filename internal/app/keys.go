@@ -19,8 +19,8 @@ func (w *Window) shortcuts(c *ui.Context) {
 	switch {
 	case c.Shortcut(ui.Cmd, ui.KeyT):
 		path := fsys.Home()
-		if t != nil && t.Path != "" {
-			path = t.Path
+		if t != nil && t.place() != "" {
+			path = t.place()
 		}
 		w.newTab(p.ID, path, "")
 	case c.Shortcut(ui.Cmd, ui.KeyN):
@@ -76,7 +76,9 @@ func (w *Window) shortcuts(c *ui.Context) {
 	case c.Shortcut(0, ui.KeyF5), c.Shortcut(ui.Cmd, ui.KeyR):
 		w.reload(t)
 	case c.Shortcut(ui.Cmd, ui.KeyF), c.Shortcut(0, ui.KeyF3):
-		t.filterRef.Focus()
+		w.setEverywhere(t, false)
+	case c.Shortcut(ui.Cmd|ui.Shift, ui.KeyF):
+		w.setEverywhere(t, true)
 	case c.Shortcut(ui.Cmd|ui.Shift, ui.KeyN):
 		w.newFolder(t)
 	case c.Shortcut(ui.Cmd, ui.KeyBackslash):

@@ -152,7 +152,7 @@ func (w *Window) arrived(dir string, names []string, rename string) {
 // the system's file manager does: they paste in it, and its paste here.
 func (w *Window) copyChosen(t *Tab, cut bool) {
 	paths := t.chosenPaths()
-	if len(paths) == 0 || !real(t.Path) {
+	if len(paths) == 0 || !real(t.Path) && !t.searching() {
 		return
 	}
 	a := w.app
@@ -445,6 +445,11 @@ func (w *Window) systemMenu(t *Tab, background bool) {
 	if t.Path == "" || t.Path == fsys.Computer && background || t.bin() {
 		return
 	}
+	if t.searching() && (background || len(t.chosenPaths()) == 0) {
+		// What a search found is of no one folder, and a program found is
+		// no file: the system has no menu for either.
+		return
+	}
 	paths := t.chosenPaths()
 	dir := ""
 	if background || len(paths) == 0 {
@@ -459,8 +464,17 @@ func (w *Window) systemMenu(t *Tab, background bool) {
 				return
 			}
 			if action == shell.MenuRename && len(paths) == 1 {
-				t.rename = fsys.Base(paths[0])
+				t.rename = t.nameOfPath(paths[0])
 				t.wantFocus = true
+				return
+			}
+			switch {
+			case action == shell.MenuOpen:
+				// As a double click opens: by the program found here.
+				w.openChosen(t)
+				return
+			case action == shell.MenuOpenWith && len(paths) == 1:
+				w.choose(paths[0], false)
 				return
 			}
 			w.refresh(t)

@@ -69,6 +69,10 @@ func (w *Window) setView(t *Tab, m viewMode) {
 		return
 	}
 	t.mode = m
+	if t.find != nil {
+		// Asked for while a search shows: the folder's view too.
+		t.find.mode = m
+	}
 	t.grid = ui.GridState{}
 	t.renaming = ""
 	t.wantFocus = true
@@ -117,6 +121,9 @@ func (w *Window) grid(c *ui.Context, t *Tab, focused bool) {
 		}
 		if t.bin() {
 			return t.trash[t.view[i]].Name
+		}
+		if t.searching() {
+			return t.result(t.view[i]).Name
 		}
 		return t.entry(i).Name
 	}
@@ -170,6 +177,7 @@ func (w *Window) grid(c *ui.Context, t *Tab, focused bool) {
 		w.item(c, t, icons, i)
 	}).Grow(1).MinHeight(0).Padding(2, 6).Label(locales.Files())
 	w.bandOn(c, t, g)
+	w.takeTyping(c, t, g, true)
 	if g.Changed() {
 		t.selStale = true
 	}
@@ -179,7 +187,7 @@ func (w *Window) grid(c *ui.Context, t *Tab, focused bool) {
 	switch {
 	case t.bin():
 		g.ContextMenu(func(m *ui.Menu) { w.trashFolderMenu(m, t) })
-	case !drives:
+	case !drives && !t.searching():
 		g.ContextMenu(func(m *ui.Menu) { w.folderMenu(m, t) })
 	}
 	if t.wantFocus && focused && !t.editing && t.renaming == "" {
@@ -235,13 +243,13 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 	icon := tx.icon
 	if icon == nil {
 		var final bool
-		if icon, final = icons.forEntry(t.Path, e); final {
+		if icon, final = icons.forEntry(t.iconOf(i)); final {
 			tx.icon = icon
 		}
 	}
 	// A picture of the file's content takes the icon's place once made.
 	if !tx.thumbDone {
-		tx.thumb, tx.thumbDone = icons.thumbnail(t.Path, e)
+		tx.thumb, tx.thumbDone = icons.thumbnail(t.iconOf(i))
 	}
 	if tx.thumb != nil {
 		icon = tx.thumb
@@ -262,6 +270,8 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 		name = t.volumes[i].Title()
 	} else if t.bin() {
 		name = t.trash[i].Name
+	} else if t.searching() {
+		name = t.result(i).Name
 	}
 	// label builds the name, or the text that renames it.
 	label := func(lines int, center bool) {
@@ -309,7 +319,12 @@ func (w *Window) item(c *ui.Context, t *Tab, icons *iconSet, row int) {
 					ui.Text(c, tx.modified).SingleLine().FontSize(small).TextColor(th.TextMuted)
 					return
 				}
-				ui.Text(c, a.icons.typeName(e)).SingleLine().FontSize(small).TextColor(th.TextMuted)
+				if t.searching() {
+					// Where it is, in place of what kind it is.
+					ui.Text(c, t.where(t.result(i))).SingleLine().FontSize(small).TextColor(th.TextMuted)
+				} else {
+					ui.Text(c, a.icons.typeName(e)).SingleLine().FontSize(small).TextColor(th.TextMuted)
+				}
 				if !e.IsDir() {
 					tx.make(e)
 					ui.Text(c, tx.size).SingleLine().FontSize(small).TextColor(th.TextMuted)

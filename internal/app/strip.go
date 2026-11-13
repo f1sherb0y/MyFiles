@@ -58,8 +58,10 @@ func (w *Window) strip(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBa
 		ui.Row(c.Key("new")).Height(stripHeight-4).Padding(0, 3).Children(func() {
 			if iconButton(c, "tab", icoPlus, locales.TabNewTip()).Clicked() {
 				path := fsys.Home()
-				if cur := w.activeTab(p); cur != nil && cur.Path != "" {
-					path = cur.Path
+				// Where the tab is: the folder searched from, of one that
+				// shows what a search found.
+				if cur := w.activeTab(p); cur != nil && cur.place() != "" {
+					path = cur.place()
 				}
 				pane := p.ID
 				w.defer_(func() { w.newTab(pane, path, "") })
@@ -201,7 +203,7 @@ func (t *Tab) tip() string {
 
 // tabMenu is the context menu of a tab's header.
 func (w *Window) tabMenu(m *ui.Menu, p *workspace.Pane, t *Tab) {
-	id, pane, path := t.ID, p.ID, t.Path
+	id, pane, path := t.ID, p.ID, t.place()
 	if m.Item(locales.TabNew()).Shortcut(ui.Cmd, ui.KeyT).Chosen() {
 		w.defer_(func() { w.newTab(pane, path, "") })
 	}

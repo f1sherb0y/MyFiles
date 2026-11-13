@@ -16,13 +16,14 @@ import (
 	"myfiles/internal/cli"
 	"myfiles/internal/config"
 	"myfiles/internal/fsys"
+	"myfiles/internal/index"
 	"myfiles/internal/shell"
 	"myfiles/internal/watch"
 	"myfiles/internal/workspace"
 )
 
 // Version is the program's version, set when it is built.
-var Version = "0.2.3"
+var Version = "0.3.0"
 
 // App is the running program: what its windows share.
 type App struct {
@@ -80,6 +81,36 @@ type App struct {
 	updating    bool
 	// apps are the programs that open files, by the files' extension.
 	apps map[string]*typeApps
+	// finder keeps the indexes of the drives' file names and searches
+	// them; opened are the files opened from what searches found, and
+	// refinding is set while the searches showing wait to be run again.
+	finder    *index.Manager
+	opened    map[string]config.Opened
+	refinding bool
+	// programs are the programs and the system's settings a search of
+	// the whole computer finds beside the files, listed at programsAt;
+	// programsBusy is set while they are listed.
+	programs     []shell.Program
+	programsAt   time.Time
+	programsBusy bool
+	// filtersText is what the settings' field of the kinds of files
+	// holds, once filtersShown.
+	filtersText  string
+	filtersShown bool
+	// learned are the files opened for each query, by the query as it is
+	// told from others: nil until first asked for.
+	learned map[string][]config.Learned
+	// refound is when they were last run again, and refindTook how long
+	// the longest of them took.
+	refound    time.Time
+	refindTook time.Duration
+	findCols   []ui.TableColumn
+	// rulesText is what the settings' box of rules holds, read from the
+	// settings once it shows, and elevating is set while the system asks
+	// for an administrator's rights to read the drives.
+	rulesText  string
+	rulesShown bool
+	elevating  bool
 }
 
 // Run shows what a command line asks for and runs until the last window
@@ -89,6 +120,7 @@ func Run(cmd *cli.Command) error {
 	a := &App{set: config.Load(), nextTab: 1, desk: system{}}
 	a.side = newPlaces(&a.set, config.LoadRecent())
 	a.hub = watch.New()
+	a.opened = config.LoadOpened()
 	a.columns = ui.TableLayout{Order: a.set.ColumnOrder, Widths: a.set.Columns}
 	a.exe, _ = os.Executable()
 	shell.Quiet()
@@ -118,7 +150,13 @@ func Run(cmd *cli.Command) error {
 		}
 		a.open(next, false)
 	})
-	mygo.App.OnWindowAllClosed(func() { mygo.App.Quit() })
+	mygo.App.OnWindowAllClosed(func() {
+		// The indexes are written as they are now.
+		if a.finder != nil {
+			a.finder.Close()
+		}
+		mygo.App.Quit()
+	})
 	mark("run")
 	mygo.App.WhenReady(func() {
 		mark("ready")
@@ -133,6 +171,7 @@ func Run(cmd *cli.Command) error {
 			a.bench = newBench(cmd)
 		}
 		a.importPins()
+		a.startIndex()
 		a.open(cmd, true)
 		mark("opened")
 		if !solo {
