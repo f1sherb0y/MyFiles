@@ -308,6 +308,9 @@ func (h *harness) settle() {
 		busy := len(q) > 0
 		for _, t := range h.w.tabs {
 			busy = busy || t.loading || t.reload
+			// A search under way, as one reading a folder no index has: on
+			// a slow machine it outlasts three quiet frames.
+			busy = busy || t.find != nil && t.find.stop != nil
 		}
 		if busy {
 			quiet = 0
