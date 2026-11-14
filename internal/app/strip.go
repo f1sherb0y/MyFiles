@@ -64,7 +64,12 @@ func (w *Window) strip(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBa
 					path = cur.place()
 				}
 				pane := p.ID
-				w.defer_(func() { w.newTab(pane, path, "") })
+				if cur := w.activeTab(p); cur != nil && cur.term != nil {
+					// Beside a terminal, one more of them, where it is.
+					w.defer_(func() { w.addTerminal(pane, path) })
+				} else {
+					w.defer_(func() { w.newTab(pane, path, "") })
+				}
 			}
 		})
 		ui.Spacer(c)
@@ -171,6 +176,8 @@ func (w *Window) tab(c *ui.Context, p *workspace.Pane, t *Tab, index int, active
 		icon, _ := w.app.icons.forPath(t.Path, fsys.AttrDir)
 		if t.settings {
 			ui.Icon(c, icoSettings).FontSize(14).Shrink(0)
+		} else if t.term != nil {
+			ui.Icon(c, icoTerminal).FontSize(14).Shrink(0)
 		} else if t.Path == fsys.Computer || t.Path == "" {
 			ui.Icon(c, icoComputer).FontSize(14).Shrink(0)
 		} else if icon != nil {
@@ -195,6 +202,9 @@ func (t *Tab) tip() string {
 	if t.settings {
 		return locales.Settings()
 	}
+	if t.term != nil {
+		return t.term.where()
+	}
 	if !real(t.Path) {
 		return t.title()
 	}
@@ -207,8 +217,16 @@ func (w *Window) tabMenu(m *ui.Menu, p *workspace.Pane, t *Tab) {
 	if m.Item(locales.TabNew()).Shortcut(ui.Cmd, ui.KeyT).Chosen() {
 		w.defer_(func() { w.newTab(pane, path, "") })
 	}
-	if m.Item(locales.TabDuplicate()).Disabled(t.settings).Chosen() {
+	if m.Item(locales.TabDuplicate()).Disabled(t.settings || t.term != nil).Chosen() {
 		w.defer_(func() { w.newTab(pane, path, "") })
+	}
+	if m.Item(locales.TerminalNew()).Shortcut(ui.Ctrl|ui.Shift, ui.KeyBackquote).Chosen() {
+		w.defer_(func() {
+			// Of the pane the tab is in, as the key is of the one with the
+			// keyboard.
+			w.focusPane(w.layout.Pane(pane))
+			w.newTerminal()
+		})
 	}
 	m.Separator()
 	alone := len(p.Tabs) < 2

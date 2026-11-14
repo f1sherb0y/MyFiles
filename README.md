@@ -12,7 +12,7 @@
   <a href="https://github.com/f1sherb0y/MyFiles/releases/latest">所有版本</a>
 </p>
 
-一个快、紧凑的 Windows 文件管理器，用来替代资源管理器。界面用 [MyGo](https://github.com/egoist/mygo) 的原生 UI 在 GPU 上画，纯 Go，没有 cgo，单个 16 MB 的 exe。
+一个快、紧凑的 Windows 文件管理器，用来替代资源管理器。界面用 [MyGo](https://github.com/egoist/mygo) 的原生 UI 在 GPU 上画，纯 Go，没有 cgo，单个 19 MB 的 exe。
 
 **浏览和切换视图**
 
@@ -29,6 +29,7 @@
 - **快**：进一个文件夹，从发出导航到画面交给显示，本地磁盘上是 3–7 ms（5,000 项的 System32 约 6 ms，26,000 项的 WinSxS 约 25 ms）。同一台机器上 Explorer++ 是 53 ms–14.8 s，最小差距 16 倍；测法和完整数字见 [docs/benchmark.md](docs/benchmark.md)。文件夹的第一帧尽量就是最终的画面：见过的类型的图标和类型名直接在，没见过的最多等 10 ms，不会先排错列数再跳一下。
 - **搜索**：在文件夹里直接打字（或点放大镜）就搜这个文件夹（含所有子文件夹），Ctrl+Shift+F 或点电脑图标搜整台电脑，这时应用和系统设置也在结果里。236 万个文件的盘上一次搜索 3–5 ms；支持模糊匹配、拼音、繁简互通、`!` 排除、`^` `$`、路径、类型和大小时间筛选、自定义类型，`cs 词` 搜文件内容（PDF、Office、文本），结果里可以直接重命名。语法和排序对齐 [Lertaro](https://github.com/Lertaro/Lertaro)，在它自己的测试数据上同机快 2–10 倍。NTFS 盘建索引后用变更日志实时跟进，其他盘用目录变更通知，都不装系统服务。索引是映射的文件，不占程序自己的内存：1700 万个文件的五个盘，程序的私有内存不到 70 MB。见 [docs/design.md](docs/design.md#搜索)。
 - **标签 + 分屏**：把标签拖到窗格的上、下、左、右边缘就分屏，拖到别的窗格就并过去，像窗口贴靠。
+- **终端**：Ctrl+` 在当前文件夹的下半部分打开一个终端（PowerShell），目录就是当前文件夹；再按在文件和终端之间来回切。终端是标签页，可以拖动、分屏，用的是 [Ghostty](https://ghostty.org) 的模拟器，随程序自带，不联网也能用。
 - **地址栏**：每一级路径是一个按钮；点空白处或按 Ctrl+L 变成输入框，可以输入、复制、粘贴。
 - **文件操作**：标签之间、窗格之间、和别的程序之间拖放；Ctrl+C / X / V 和资源管理器互通。
 - **默认打开方式**：选择应用时勾选「设为系统默认打开方式」，同时更新 Windows 的文件关联，在资源管理器里打开同类文件也会使用所选应用。支持 Windows 10 和 Windows 11。
@@ -50,7 +51,7 @@
 需要 Go 1.27。
 
 ```powershell
-.\tools\setup-mygo.ps1      # 只需一次：取 MyGo 并打上 patches\mygo.patch
+.\tools\setup-mygo.ps1      # 只需一次：取 MyGo 并打上 patches\mygo.patch，取终端的模拟器库
 .\build.ps1                 # 生成 bin\myfiles.exe
 .\bin\myfiles.exe D:\Code     # 打开一个文件夹
 go test ./internal/...      # 测试（不弹窗口，不出声）
@@ -92,6 +93,8 @@ MyFiles 是单实例的：再次启动只是把参数交给正在运行的那个
 | Ctrl+Tab、Ctrl+1…9 | 切换标签 |
 | Ctrl+\ / Ctrl+Shift+\ | 向右 / 向下分屏 |
 | F6 | 切换窗格 |
+| Ctrl+` | 在当前文件夹下方打开终端；在文件夹和它的终端之间切换 |
+| Ctrl+Shift+` | 再开一个终端 |
 | Alt+← / Alt+→ / Alt+↑、Backspace | 后退 / 前进 / 上一级 |
 | Ctrl+L、Alt+D、F4 | 编辑地址 |
 | 直接打字、Ctrl+F、F3 | 在当前文件夹（含子文件夹）里搜索 |

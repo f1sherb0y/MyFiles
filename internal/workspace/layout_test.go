@@ -115,3 +115,37 @@ func TestJSON(t *testing.T) {
 		t.Fatalf("read back %s", data)
 	}
 }
+
+// Under and Over go between a pane and the one right under it.
+func TestUnderOver(t *testing.T) {
+	l := New(1, 2, 3, 4)
+	top := l.Focused().ID
+	if l.Under(top) != nil || l.Over(top) != nil {
+		t.Fatal("a pane alone has one under or over it")
+	}
+	l.Split(top, 2, ZoneBottom)
+	low := l.PaneOf(2).ID
+	if p := l.Under(top); p == nil || p.ID != low {
+		t.Fatalf("under the upper pane: %v", p)
+	}
+	if p := l.Over(low); p == nil || p.ID != top {
+		t.Fatalf("over the lower pane: %v", p)
+	}
+	if l.Under(low) != nil || l.Over(top) != nil {
+		t.Fatal("something under the lower pane, or over the upper")
+	}
+	// A pane beside the upper one has nothing under it; one beside the
+	// lower one is under nothing.
+	l.Split(top, 3, ZoneLeft)
+	left := l.PaneOf(3).ID
+	if l.Under(left) != nil {
+		t.Fatal("something under the pane beside the upper one")
+	}
+	if p := l.Under(top); p == nil || p.ID != low {
+		t.Fatalf("under the upper pane, once it has one beside it: %v", p)
+	}
+	l.Split(low, 4, ZoneRight)
+	if l.Over(l.PaneOf(4).ID) != nil {
+		t.Fatal("the pane beside the lower one is under one")
+	}
+}

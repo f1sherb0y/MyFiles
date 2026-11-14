@@ -23,7 +23,7 @@ import (
 )
 
 // Version is the program's version, set when it is built.
-var Version = "0.3.0"
+var Version = "0.4.0"
 
 // App is the running program: what its windows share.
 type App struct {
@@ -87,6 +87,9 @@ type App struct {
 	finder    *index.Manager
 	opened    map[string]config.Opened
 	refinding bool
+	// termCommand is the program terminals run, the user's shell when
+	// empty.
+	termCommand []string
 	// programs are the programs and the system's settings a search of
 	// the whole computer finds beside the files, listed at programsAt;
 	// programsBusy is set while they are listed.

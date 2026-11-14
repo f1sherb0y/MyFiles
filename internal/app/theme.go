@@ -81,6 +81,7 @@ var (
 	icoSearch      = svg(`<circle cx="7" cy="7" r="4"/><path d="M10 10l3.25 3.25"/>`)
 	icoComputer    = svg(`<rect x="2.5" y="3" width="11" height="7.5" rx="1"/><path d="M6 13h4M8 10.5V13"/>`)
 	icoView        = svg(`<rect x="2.75" y="2.75" width="4.25" height="4.25" rx="0.8"/><rect x="9" y="2.75" width="4.25" height="4.25" rx="0.8"/><rect x="2.75" y="9" width="4.25" height="4.25" rx="0.8"/><rect x="9" y="9" width="4.25" height="4.25" rx="0.8"/>`)
+	icoTerminal    = svg(`<rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M4.75 6.25L7 8l-2.25 1.75M8.5 10h2.75"/>`)
 	icoMore        = svg(`<circle cx="4" cy="8" r="0.6"/><circle cx="8" cy="8" r="0.6"/><circle cx="12" cy="8" r="0.6"/>`)
 )
 

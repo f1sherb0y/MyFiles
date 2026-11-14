@@ -2,6 +2,7 @@ package app
 
 import (
 	_ "embed"
+	"strings"
 	"sync"
 	"time"
 
@@ -167,6 +168,10 @@ func (a *App) window(session *config.Session) *Window {
 			t.sort = ui.SortOrder{Column: a.set.SortBy, Descending: a.set.SortDescending}
 			t.sorted = t.sort
 			t.settings = st.Path == settingsPath
+			if dir, ok := strings.CutPrefix(st.Path, terminalPath); ok {
+				// Its shell starts when the tab first shows.
+				t.term = &termTab{dir: dir}
+			}
 			w.tabs[t.ID] = t
 			if st.ID >= a.nextTab {
 				a.nextTab = st.ID + 1
@@ -191,7 +196,7 @@ func (w *Window) closed() {
 func (w *Window) start(session *config.Session) {
 	if session != nil {
 		for _, st := range session.Tabs {
-			if t := w.tabs[st.ID]; t != nil && !t.settings {
+			if t := w.tabs[st.ID]; t != nil && !t.settings && t.term == nil {
 				w.navigate(t, st.Path, navReplace, "")
 			}
 		}
@@ -271,7 +276,7 @@ func (w *Window) closeTab(id workspace.TabID) {
 	if t == nil {
 		return
 	}
-	if t.place() != "" {
+	if t.place() != "" && t.term == nil {
 		w.reopen = append(w.reopen, t.place())
 	}
 	w.release(t)
@@ -300,6 +305,7 @@ func (w *Window) release(t *Tab) {
 		t.unwatch()
 		t.unwatch = nil
 	}
+	t.stopTerminal()
 }
 
 // show makes a tab the one its pane shows, with the focus.
@@ -350,7 +356,7 @@ func (w *Window) cycleTab(forward bool) {
 // one, or below it.
 func (w *Window) splitCurrent(zone workspace.Zone) {
 	p, t := w.layout.Focused(), w.current()
-	if p == nil || t == nil || t.settings {
+	if p == nil || t == nil || t.settings || t.term != nil {
 		return
 	}
 	id := w.newTab(p.ID, t.place(), "")
@@ -364,7 +370,7 @@ func (w *Window) changed() {
 	if w.win == nil {
 		return
 	}
-	if t := w.current(); t != nil && (t.Path != "" || t.settings) {
+	if t := w.current(); t != nil && (t.Path != "" || t.settings || t.term != nil) {
 		w.win.SetTitle(t.title() + " - MyFiles")
 	}
 	if !w.building {
@@ -404,6 +410,9 @@ func (w *Window) save() {
 			path := t.place()
 			if t.settings {
 				path = settingsPath
+			}
+			if t.term != nil {
+				path = terminalPath + t.term.where()
 			}
 			s.Tabs = append(s.Tabs, config.Tab{ID: id, Path: path, View: viewSpecs[t.mode].id})
 		}

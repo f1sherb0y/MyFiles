@@ -56,6 +56,9 @@ type Tab struct {
 	// settings is set for the tab that shows the settings in place of a
 	// folder: it has no Path.
 	settings bool
+	// term is set for a tab that shows a terminal in place of a folder:
+	// it has no Path either.
+	term *termTab
 	// find is the search the tab shows in place of its folder, nil for
 	// none; Path is then searchPath. everywhere has the tab's searches be
 	// of the whole computer, caretEnd puts the caret after what was typed
@@ -185,6 +188,9 @@ func (t *Tab) title() string {
 	if t.settings {
 		return locales.Settings()
 	}
+	if t.term != nil {
+		return t.term.name()
+	}
 	if t.searching() {
 		return locales.SearchTitle(strings.TrimSpace(t.filter))
 	}
@@ -225,6 +231,9 @@ func (t *Tab) iconOf(i int32) (string, *fsys.Entry) {
 // place is the folder the tab is at: the one searched from, while a
 // search shows.
 func (t *Tab) place() string {
+	if t.term != nil {
+		return t.term.where()
+	}
 	if t.find != nil {
 		return t.find.origin
 	}

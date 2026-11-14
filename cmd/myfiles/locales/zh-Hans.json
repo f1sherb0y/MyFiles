@@ -23,6 +23,9 @@
   "tabSplitDown": "向下拆分",
   "tabSplitLeft": "向左拆分",
   "tabSplitUp": "向上拆分",
+  "terminal": "终端",
+  "terminalNew": "新建终端",
+  "terminalFailed": "终端无法启动",
   "tabCloseThis": "关闭标签页",
   "tabCloseOthers": "关闭其他标签页",
 

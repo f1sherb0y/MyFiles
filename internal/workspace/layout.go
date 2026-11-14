@@ -373,3 +373,64 @@ func (l *Layout) Valid() bool {
 	}
 	return walk(l.Root)
 }
+
+// first and last are the first and the last pane of a part of the layout,
+// in the order Panes lists them.
+func first(n *Node) *Pane {
+	for n != nil && n.Pane == nil {
+		n = n.A
+	}
+	if n == nil {
+		return nil
+	}
+	return n.Pane
+}
+
+func last(n *Node) *Pane {
+	for n != nil && n.Pane == nil {
+		n = n.B
+	}
+	if n == nil {
+		return nil
+	}
+	return n.Pane
+}
+
+// stackedAt is the split of an upper and a lower part of which upper, or
+// lower, tells that it is the one sought.
+func (l *Layout) stackedAt(is func(n *Node) bool) *Node {
+	var found *Node
+	var walk func(n *Node)
+	walk = func(n *Node) {
+		if n == nil || n.Pane != nil || found != nil {
+			return
+		}
+		if n.Stacked && is(n) {
+			found = n
+			return
+		}
+		walk(n.A)
+		walk(n.B)
+	}
+	walk(l.Root)
+	return found
+}
+
+// Under is the pane right under a pane: the first of the lower part of
+// the split whose upper part ends with it. nil when nothing is under it.
+func (l *Layout) Under(id PaneID) *Pane {
+	n := l.stackedAt(func(n *Node) bool { p := last(n.A); return p != nil && p.ID == id })
+	if n == nil {
+		return nil
+	}
+	return first(n.B)
+}
+
+// Over is the pane a pane is right under, nil when it is under none.
+func (l *Layout) Over(id PaneID) *Pane {
+	n := l.stackedAt(func(n *Node) bool { p := first(n.B); return p != nil && p.ID == id })
+	if n == nil {
+		return nil
+	}
+	return last(n.A)
+}

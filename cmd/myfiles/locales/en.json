@@ -23,6 +23,9 @@
   "tabSplitDown": "Split Down",
   "tabSplitLeft": "Split Left",
   "tabSplitUp": "Split Up",
+  "terminal": "Terminal",
+  "terminalNew": "New Terminal",
+  "terminalFailed": "The terminal could not start",
   "tabCloseThis": "Close Tab",
   "tabCloseOthers": "Close Other Tabs",
 

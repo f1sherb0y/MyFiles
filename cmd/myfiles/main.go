@@ -9,6 +9,7 @@ import (
 	"myfiles/internal/assochash"
 	"myfiles/internal/cli"
 	"myfiles/internal/content"
+	"myfiles/internal/ghostty"
 	"myfiles/internal/index"
 	"myfiles/internal/search"
 	"myfiles/internal/shell"
@@ -51,6 +52,7 @@ func main() {
 		fmt.Print("UserChoiceLatestHash (cssxn)\n\n", assochash.License)
 		fmt.Print("\n\nLertaro (the grammar, matching and order of searches, and the table of pinyin)\n\n", search.License)
 		fmt.Print("\n\ngithub.com/ledongthuc/pdf (reading the text of PDFs)\n\n", content.LicensePDF)
+		fmt.Print("\n\nGhostty (the terminal's emulator, libghostty-vt)\n\n", ghostty.License)
 		return
 	case cmd.SetDefault != "":
 		attachConsole()

@@ -197,8 +197,12 @@ func (w *Window) sideRow(c *ui.Context, r sideRow, current string) {
 		case opens:
 			w.defer_(func() { a.toggle(path) })
 		default:
-			if t := w.current(); t != nil {
+			if t := w.folderTab(); t != nil {
 				w.navigate(t, path, navPush, "")
+			} else if p := w.layout.Focused(); p != nil {
+				// Only terminals show: the folder gets a tab.
+				pane := p.ID
+				w.defer_(func() { w.newTab(pane, path, "") })
 			}
 		}
 	}

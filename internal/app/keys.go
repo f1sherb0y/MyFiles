@@ -16,6 +16,27 @@ func (w *Window) shortcuts(c *ui.Context) {
 	if p == nil {
 		return
 	}
+	// Ctrl+` goes between a folder and the terminal under it, which it
+	// opens; with Shift it opens one more.
+	switch {
+	case c.Shortcut(ui.Ctrl, ui.KeyBackquote):
+		w.toggleTerminal()
+	case c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyBackquote):
+		w.newTerminal()
+	case c.Shortcut(ui.Ctrl, ui.KeyTab):
+		w.cycleTab(true)
+	case c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyTab):
+		w.cycleTab(false)
+	}
+	if t != nil && t.term != nil {
+		// Every other key is the terminal's, for the program in it: a
+		// shell has its own Ctrl+W, Ctrl+R and Ctrl+L. Ctrl+Shift+W closes
+		// the tab, as in Windows Terminal.
+		if c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyW) {
+			w.closeTab(t.ID)
+		}
+		return
+	}
 	switch {
 	case c.Shortcut(ui.Cmd, ui.KeyT):
 		path := fsys.Home()
@@ -31,9 +52,9 @@ func (w *Window) shortcuts(c *ui.Context) {
 			w.reopen = w.reopen[:n-1]
 			w.newTab(p.ID, path, "")
 		}
-	case c.Shortcut(ui.Ctrl, ui.KeyTab), c.Shortcut(ui.Ctrl, ui.KeyPageDown):
+	case c.Shortcut(ui.Ctrl, ui.KeyPageDown):
 		w.cycleTab(true)
-	case c.Shortcut(ui.Ctrl|ui.Shift, ui.KeyTab), c.Shortcut(ui.Ctrl, ui.KeyPageUp):
+	case c.Shortcut(ui.Ctrl, ui.KeyPageUp):
 		w.cycleTab(false)
 	case c.Shortcut(0, ui.KeyF6):
 		w.focusPane(w.layout.Neighbor(true))

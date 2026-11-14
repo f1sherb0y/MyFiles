@@ -244,6 +244,36 @@ func (msgs Messages) TabSplitUp() string {
 	return Catalog.Format(msgs.locale, "tabSplitUp", nil)
 }
 
+// Terminal says "Terminal"
+// in the language the app shows.
+func Terminal() string { return In(i18n.Locale()).Terminal() }
+
+// Terminal says "Terminal"
+// in the language of msgs.
+func (msgs Messages) Terminal() string {
+	return Catalog.Format(msgs.locale, "terminal", nil)
+}
+
+// TerminalNew says "New Terminal"
+// in the language the app shows.
+func TerminalNew() string { return In(i18n.Locale()).TerminalNew() }
+
+// TerminalNew says "New Terminal"
+// in the language of msgs.
+func (msgs Messages) TerminalNew() string {
+	return Catalog.Format(msgs.locale, "terminalNew", nil)
+}
+
+// TerminalFailed says "The terminal could not start"
+// in the language the app shows.
+func TerminalFailed() string { return In(i18n.Locale()).TerminalFailed() }
+
+// TerminalFailed says "The terminal could not start"
+// in the language of msgs.
+func (msgs Messages) TerminalFailed() string {
+	return Catalog.Format(msgs.locale, "terminalFailed", nil)
+}
+
 // TabCloseThis says "Close Tab"
 // in the language the app shows.
 func TabCloseThis() string { return In(i18n.Locale()).TabCloseThis() }

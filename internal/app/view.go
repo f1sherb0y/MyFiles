@@ -123,6 +123,10 @@ func (w *Window) pane(c *ui.Context, p *workspace.Pane, e edges, bar ui.TitleBar
 			w.settingsPage(c)
 			return
 		}
+		if t.term != nil {
+			w.terminalPage(c, p, t, focused)
+			return
+		}
 		w.toolbar(c, p, t)
 		ui.Divider(c)
 		if t.searching() {
@@ -152,30 +156,7 @@ func (w *Window) body(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 		}
 	})
 
-	zone := workspace.ZoneNone
-	if d, over := ui.DragOver[tabDrag](body); over {
-		if x, y, in := body.PointerPosition(); in {
-			b := body.Bounds()
-			zone = workspace.ZoneAt(x/max(b.W, 1), y/max(b.H, 1))
-		}
-		// A pane's only tab cannot split it, and its own tab dropped
-		// on its middle goes nowhere.
-		if src := w.layout.PaneOf(d.id); src == p && (len(p.Tabs) == 1 || zone == workspace.ZoneCenter) {
-			zone = workspace.ZoneNone
-		}
-		w.zone, w.zonePane = zone, p.ID
-	}
-	if d, ok := ui.Drop[tabDrag](body); ok && w.zonePane == p.ID && w.zone != workspace.ZoneNone {
-		id, pane, at := d.id, p.ID, w.zone
-		w.defer_(func() {
-			if w.layout.Split(pane, id, at) {
-				if t := w.tabs[id]; t != nil {
-					t.wantFocus = true
-				}
-				w.changed()
-			}
-		})
-	}
+	zone := w.tabZone(body, p)
 
 	// Ctrl and the wheel go through the views, from the table to the
 	// largest icons, as in the system's file manager.
@@ -217,6 +198,37 @@ func (w *Window) body(c *ui.Context, p *workspace.Pane, t *Tab, focused bool) {
 			p.Stroke(ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}, th.Accent, 3, 2)
 		})
 	}
+}
+
+// tabZone takes the tabs dragged over what a pane shows, and dropped on
+// it: a tab splits the pane on the side it is let go at, or joins it. It
+// returns where the tab held over it would go.
+func (w *Window) tabZone(body ui.Element, p *workspace.Pane) workspace.Zone {
+	zone := workspace.ZoneNone
+	if d, over := ui.DragOver[tabDrag](body); over {
+		if x, y, in := body.PointerPosition(); in {
+			b := body.Bounds()
+			zone = workspace.ZoneAt(x/max(b.W, 1), y/max(b.H, 1))
+		}
+		// A pane's only tab cannot split it, and its own tab dropped
+		// on its middle goes nowhere.
+		if src := w.layout.PaneOf(d.id); src == p && (len(p.Tabs) == 1 || zone == workspace.ZoneCenter) {
+			zone = workspace.ZoneNone
+		}
+		w.zone, w.zonePane = zone, p.ID
+	}
+	if d, ok := ui.Drop[tabDrag](body); ok && w.zonePane == p.ID && w.zone != workspace.ZoneNone {
+		id, pane, at := d.id, p.ID, w.zone
+		w.defer_(func() {
+			if w.layout.Split(pane, id, at) {
+				if t := w.tabs[id]; t != nil {
+					t.wantFocus = true
+				}
+				w.changed()
+			}
+		})
+	}
+	return zone
 }
 
 // zonePreview shows where in the pane a dragged tab would go.

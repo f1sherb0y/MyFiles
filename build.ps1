@@ -7,7 +7,7 @@ param([switch]$E2E)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 $env:CGO_ENABLED = '0'
-if (-not (Test-Path third_party\mygo\go.mod)) { & .\tools\setup-mygo.ps1 }
+if (-not (Test-Path third_party\mygo\go.mod) -or -not (Test-Path internal\ghostty\ghostty-vt-windows-amd64.dll)) { & .\tools\setup-mygo.ps1 }
 Push-Location third_party\mygo
 go run .\cmd\mygo build -skip-installer ..\..\cmd\myfiles
 if ($LASTEXITCODE -ne 0) { Pop-Location; exit 1 }
