@@ -5,7 +5,11 @@
 <h1 align="center">MyFiles</h1>
 
 <p align="center">
-  <a href="https://github.com/f1sherb0y/MyFiles/releases/latest">下载安装包</a>
+  <a href="https://github.com/f1sherb0y/MyFiles/releases/latest/download/MyFiles-setup-amd64.exe"><b>下载安装包（最新版，Windows 10 / 11，64 位）</b></a>
+  ·
+  <a href="https://github.com/f1sherb0y/MyFiles/releases/latest/download/MyFiles-portable-amd64.exe">免安装版</a>
+  ·
+  <a href="https://github.com/f1sherb0y/MyFiles/releases/latest">所有版本</a>
 </p>
 
 一个快、紧凑的 Windows 文件管理器，用来替代资源管理器。界面用 [MyGo](https://github.com/egoist/mygo) 的原生 UI 在 GPU 上画，纯 Go，没有 cgo，单个 16 MB 的 exe。
@@ -39,7 +43,7 @@
 
 ## 安装
 
-到 [Releases](https://github.com/f1sherb0y/MyFiles/releases/latest) 下载 `myfiles-setup-<版本>-amd64.exe` 运行即可，只装给当前用户，不需要管理员权限；同一页的 `MyFiles-<版本>-portable-amd64.exe` 是免安装的单个文件。安装包没有代码签名，Windows 可能会提示「未知发布者」。
+下载 [MyFiles-setup-amd64.exe](https://github.com/f1sherb0y/MyFiles/releases/latest/download/MyFiles-setup-amd64.exe)（总是最新版）运行即可，只装给当前用户，不需要管理员权限；[MyFiles-portable-amd64.exe](https://github.com/f1sherb0y/MyFiles/releases/latest/download/MyFiles-portable-amd64.exe) 是免安装的单个文件。带版本号的文件和旧版本在 [Releases](https://github.com/f1sherb0y/MyFiles/releases/latest) 页。安装包没有代码签名，Windows 可能会提示「未知发布者」。
 
 ## 构建和运行
 

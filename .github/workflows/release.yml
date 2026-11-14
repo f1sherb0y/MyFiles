@@ -53,6 +53,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Pop-Location
           Copy-Item bin\dist\windows-amd64\MyFiles.exe "bin\dist\windows-amd64\MyFiles-$env:VERSION-portable-amd64.exe"
+          # The same two under names without the version, which the README
+          # links to: releases/latest/download/<name> is then always the
+          # newest.
+          Copy-Item "bin\dist\windows-amd64\myfiles-setup-$env:VERSION-amd64.exe" bin\dist\windows-amd64\MyFiles-setup-amd64.exe
+          Copy-Item bin\dist\windows-amd64\MyFiles.exe bin\dist\windows-amd64\MyFiles-portable-amd64.exe
           Get-ChildItem bin\dist\windows-amd64
       - name: Publish the release
         shell: pwsh
@@ -62,6 +67,8 @@ jobs:
           $files = @(
             "bin\dist\windows-amd64\myfiles-setup-$env:VERSION-amd64.exe",
             "bin\dist\windows-amd64\MyFiles-$env:VERSION-portable-amd64.exe",
+            "bin\dist\windows-amd64\MyFiles-setup-amd64.exe",
+            "bin\dist\windows-amd64\MyFiles-portable-amd64.exe",
             # What installed copies update from: the manifest they read from
             # the latest release, and the archive and deltas it names.
             "bin\dist\windows-amd64\update-windows-amd64.json",
