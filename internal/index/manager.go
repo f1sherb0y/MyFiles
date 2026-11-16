@@ -880,6 +880,11 @@ func (m *Manager) Close() {
 	drives := make([]*drive, 0, len(m.drives))
 	for _, d := range m.drives {
 		drives = append(drives, d)
+		// All of them are told before any is waited for: one that waits
+		// its turn to be read would start as the one before it stops.
+		if d.cancel != nil {
+			d.cancel()
+		}
 	}
 	m.mu.Unlock()
 	for _, d := range drives {

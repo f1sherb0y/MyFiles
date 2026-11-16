@@ -104,10 +104,11 @@ func (w *Window) searchContent(t *Tab, gen uint64, ctx context.Context, cancel c
 	stale := func() bool {
 		return w.tabs[t.ID] != t || t.find != f || f.gen != gen || ctx.Err() != nil
 	}
+	finder := a.finder
 	go func() {
-		found := a.finder.Search(ctx, req)
+		found := finder.Search(ctx, req)
 		if found.Uncovered && ctx.Err() == nil {
-			found, _ = a.finder.SearchFolder(ctx, req)
+			found, _ = finder.SearchFolder(ctx, req)
 		}
 		if ctx.Err() != nil {
 			return

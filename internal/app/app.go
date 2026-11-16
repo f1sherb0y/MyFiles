@@ -23,7 +23,7 @@ import (
 )
 
 // Version is the program's version, set when it is built.
-var Version = "0.4.0"
+var Version = "0.4.1"
 
 // App is the running program: what its windows share.
 type App struct {
@@ -87,6 +87,10 @@ type App struct {
 	finder    *index.Manager
 	opened    map[string]config.Opened
 	refinding bool
+	// leaving is set from the last window's closing until the indexes are
+	// written, which the program ends after; quit ends it.
+	leaving bool
+	quit    func()
 	// termCommand is the program terminals run, the user's shell when
 	// empty.
 	termCommand []string
@@ -120,7 +124,7 @@ type App struct {
 // closes. args and cwd are the command line as given, for a running
 // instance to take over.
 func Run(cmd *cli.Command) error {
-	a := &App{set: config.Load(), nextTab: 1, desk: system{}}
+	a := &App{set: config.Load(), nextTab: 1, desk: system{}, quit: mygo.App.Quit}
 	a.side = newPlaces(&a.set, config.LoadRecent())
 	a.hub = watch.New()
 	a.opened = config.LoadOpened()
@@ -151,15 +155,11 @@ func Run(cmd *cli.Command) error {
 		if err != nil {
 			next = &cli.Command{}
 		}
-		a.open(next, false)
+		// With no window left the program is on its way out: started
+		// again, it shows what a start shows.
+		a.open(next, len(a.windows) == 0)
 	})
-	mygo.App.OnWindowAllClosed(func() {
-		// The indexes are written as they are now.
-		if a.finder != nil {
-			a.finder.Close()
-		}
-		mygo.App.Quit()
-	})
+	mygo.App.OnWindowAllClosed(a.leave)
 	mark("run")
 	mygo.App.WhenReady(func() {
 		mark("ready")
@@ -214,8 +214,10 @@ func (a *App) open(cmd *cli.Command, first bool) {
 		if len(cmd.Targets) == 0 && session == nil {
 			if len(cmd.Delegate) > 0 && first {
 				// Started only to show such a place: nothing of
-				// ours to show.
-				mygo.App.Quit()
+				// ours to show. One on its way out ends by itself.
+				if !a.leaving {
+					a.quit()
+				}
 				return
 			}
 			cmd.Targets = []cli.Target{{Path: fsys.Home()}}
@@ -255,6 +257,42 @@ func (a *App) open(cmd *cli.Command, first bool) {
 		w.raise()
 	}
 	w.changed()
+}
+
+// leave ends the program, its last window closed, once the indexes are
+// written as they are now. Writing them takes seconds, and is not the main
+// thread's to wait for: the program started again meanwhile hands its
+// command to this one, which must be there to show it. Then it stays, and
+// follows the drives again once the indexes are written.
+func (a *App) leave() {
+	if a.leaving {
+		// The one under way ends the program.
+		return
+	}
+	old := a.finder
+	if old == nil {
+		a.quit()
+		return
+	}
+	// A search in a window that comes meanwhile gets a manager of its own,
+	// which reads folders and leaves the drives' indexes alone.
+	a.leaving, a.finder = true, nil
+	go func() {
+		old.Close()
+		a.desk.post(func() {
+			a.leaving = false
+			if len(a.windows) == 0 {
+				// Whatever came meanwhile and went is closed as this was.
+				a.leave()
+				return
+			}
+			if a.finder == nil {
+				a.startIndex()
+			} else {
+				a.followDrives()
+			}
+		})
+	}()
 }
 
 // invalidate draws every window again.

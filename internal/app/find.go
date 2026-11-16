@@ -155,9 +155,19 @@ func (a *App) startIndex() {
 	cfg := index.Config{Dir: index.DefaultDir(), Rules: a.rules(), Expand: fsys.ExpandEnv,
 		Off: a.set.Search.Off, Extra: a.set.Search.Extra, Changed: a.indexChanged}
 	a.finder = index.NewManager(cfg)
+	a.followDrives()
+}
+
+// followDrives has the manager keep the drives' indexes, where the
+// settings have them kept. Not while the manager before it still writes
+// them, the windows it served closed: two would write the same files.
+func (a *App) followDrives() {
+	if a.leaving {
+		return
+	}
 	// An instance that leaves no trace keeps no index either, unless
 	// MYFILES_INDEX asks for one, as for a look at searching.
-	if a.set.Search.Index && cfg.Dir != "" && (!a.ephemeral || os.Getenv("MYFILES_INDEX") != "") {
+	if a.set.Search.Index && index.DefaultDir() != "" && (!a.ephemeral || os.Getenv("MYFILES_INDEX") != "") {
 		a.finder.Start()
 	}
 }
@@ -437,15 +447,16 @@ func (w *Window) search(t *Tab, again bool) {
 	done := make(chan answer, 1)
 	slowly := make(chan struct{})
 	a.startIndex()
+	finder := a.finder
 	go func() {
-		found := a.finder.Search(ctx, req)
+		found := finder.Search(ctx, req)
 		slow := false
 		if found.Uncovered && ctx.Err() == nil {
 			// No index has the folder: it is read now, for this search
 			// and those that follow.
 			close(slowly)
 			slow = true
-			found, _ = a.finder.SearchFolder(ctx, req)
+			found, _ = finder.SearchFolder(ctx, req)
 		}
 		done <- answer{found, slow, clock.Since(start)}
 	}()

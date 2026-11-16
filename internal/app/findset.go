@@ -38,7 +38,7 @@ func (w *Window) searchSettings(c *ui.Context) (changed bool) {
 		changed = true
 		// Each drive follows: those left out stay out.
 		a.startIndex()
-		if set.Index {
+		if set.Index && !a.leaving {
 			a.finder.Start()
 		}
 		for _, d := range a.finder.Drives() {
