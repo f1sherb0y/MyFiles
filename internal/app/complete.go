@@ -119,9 +119,11 @@ func (w *Window) complete(t *Tab) {
 			timer.Stop()
 			have(r)
 		case <-timer.C:
+			w.awaited++
 			go func() {
 				r := <-done
 				w.update(func() {
+					w.awaited--
 					// The address typed by now is completed with them.
 					if have(r) && t.editing {
 						w.complete(t)

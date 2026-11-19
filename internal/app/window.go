@@ -77,6 +77,9 @@ type Window struct {
 	// operation's error, until statusUntil.
 	status      string
 	statusUntil time.Time
+	// awaited counts what an address waits for off the main thread longer
+	// than a frame: a path looked for, folders read for its candidates.
+	awaited int
 }
 
 // question is something asked over the window, with what to do on yes.

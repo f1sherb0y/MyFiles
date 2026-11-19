@@ -533,9 +533,13 @@ func (w *Window) goTo(t *Tab, text string) {
 		timer.Stop()
 		show(f)
 	case <-timer.C:
+		w.awaited++
 		go func() {
 			f := <-done
-			w.update(func() { show(f) })
+			w.update(func() {
+				w.awaited--
+				show(f)
+			})
 		}()
 	}
 }

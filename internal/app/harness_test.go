@@ -305,7 +305,8 @@ func (h *harness) settle() {
 		for _, fn := range q {
 			fn()
 		}
-		busy := len(q) > 0
+		// What an address waits for, as a path looked for on a slow disk.
+		busy := len(q) > 0 || h.w.awaited > 0
 		for _, t := range h.w.tabs {
 			busy = busy || t.loading || t.reload
 			// A search under way, as one reading a folder no index has: on
