@@ -65,3 +65,33 @@ func TestParse(t *testing.T) {
 		t.Error("--select without a value passed")
 	}
 }
+
+func TestTyping(t *testing.T) {
+	home := fsys.Home()
+	const cwd = `C:\work\here`
+	for _, tc := range []struct {
+		text, dir, name string
+	}{
+		{`C:\Win`, `C:\`, "Win"},
+		{`C:\Windows\`, `C:\Windows`, ""},
+		{`c:/Windows/sys`, `C:\Windows`, "sys"},
+		{`C:`, cwd, "C:"},
+		{`sub`, cwd, "sub"},
+		{`sub\de`, `C:\work\here\sub`, "de"},
+		{`..\o`, `C:\work`, "o"},
+		{`~\Doc`, home, "Doc"},
+		{`"C:\Program Files\Com`, `C:\Program Files`, "Com"},
+		{` "al`, cwd, "al"},
+		{`shell:MyComputerFolder\d`, fsys.Computer, "d"},
+		{`shell:RecycleBinFolder\x`, "", "x"},
+		{`shell:NoSuchFolder\x`, "", "x"},
+		{`https://example.com/a`, "", "a"},
+		{`\\server\share\fo`, `\\server\share\`, "fo"},
+		{`\\server\sh`, "", "sh"},
+	} {
+		dir, name := Typing(tc.text, cwd)
+		if dir != tc.dir || name != tc.name {
+			t.Errorf("Typing(%q) = %q, %q; want %q, %q", tc.text, dir, name, tc.dir, tc.name)
+		}
+	}
+}

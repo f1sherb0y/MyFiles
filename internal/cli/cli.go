@@ -412,6 +412,33 @@ func Find(text, cwd string) (Target, error) {
 	return Target{Path: path}, nil
 }
 
+// Typing splits an address being typed after its last separator: dir is
+// the folder named up to there, as Locate finds it, and name what is typed
+// after, the beginning of a name in that folder. An address without a
+// separator is a name in cwd. dir is empty when what is typed names no
+// folder.
+func Typing(text, cwd string) (dir, name string) {
+	const seps = "/" + string(fsys.Sep)
+	i := strings.LastIndexAny(text, seps)
+	if i < 0 {
+		return cwd, strings.TrimLeft(text, ` "`)
+	}
+	name = text[i+1:]
+	head := strings.TrimLeft(text[:i+1], ` "`)
+	if len(head) >= 2 && strings.ContainsRune(seps, rune(head[0])) && strings.ContainsRune(seps, rune(head[1])) {
+		// A computer of the network without a folder it shares yet is no
+		// folder, and no name in cwd either.
+		if _, ok := fsys.Clean(head); !ok {
+			return "", name
+		}
+	}
+	path, kind := Locate(head, cwd)
+	if kind != locPath || path == shell.RecycleBin {
+		return "", name
+	}
+	return path, name
+}
+
 // Resolve looks at the targets on disk: one that names a file becomes its
 // folder with the file chosen, as a file given to a file manager is shown,
 // and one that names nothing is dropped, with an error naming the first.

@@ -137,10 +137,14 @@ type Tab struct {
 	reload bool
 
 	// editing shows the address as a text input holding addr; fresh is
-	// set until the input took the focus and selected its text.
+	// set until the input took the focus and selected its text, and
+	// addrEnd puts the caret after a text completed. cands are what the
+	// address may go on to, nil until it is typed in.
 	editing bool
 	fresh   bool
+	addrEnd bool
 	addr    string
+	cands   *candidates
 	// filterRef is the filter field, to focus it.
 	filterRef ui.Handle
 	// listFocus is set while the list of files has the keyboard, which

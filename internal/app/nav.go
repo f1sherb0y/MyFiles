@@ -68,8 +68,10 @@ func (w *Window) navigate(t *Tab, path string, mode navMode, focus string) {
 	same := path == t.Path
 	if !same {
 		t.filter = ""
+		// The folder shown read again, as when a file changed in it,
+		// leaves an address being typed alone.
+		w.endAddress(t)
 	}
-	t.editing = false
 	set := &w.app.set
 	showHidden, filter, order := set.ShowHidden, t.filter, t.order(set.DirsFirst)
 	from := visit{path: t.Path, focus: t.focusName()}

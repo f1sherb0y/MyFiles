@@ -69,7 +69,8 @@ func crumbWidth(name string, fontSize float32) float32 {
 
 // address builds the address of the folder shown. Each component is a
 // button that goes to its folder; a click beside them, or Ctrl+L, turns
-// the address into a text to type, paste or copy.
+// the address into a text to type, paste or copy, under which the folders
+// it may go on to are listed as it is typed.
 func (w *Window) address(c *ui.Context, t *Tab) {
 	th := c.Theme()
 	box := ui.Row(c.Key("address")).Grow(1).Basis(0).MinWidth(60).Height(controlSize).MarginX(4).
@@ -79,20 +80,41 @@ func (w *Window) address(c *ui.Context, t *Tab) {
 		box.Children(func() {
 			in := ui.TextInputBase(c.Key("input"), &t.addr).Grow(1).Height(controlSize-2).Padding(0, 6).
 				Label(locales.Address()).AutoFocus()
+			if t.addrEnd {
+				t.addrEnd = false
+				n := utf8.RuneCountInString(t.addr)
+				in.SetTextSelection(n, n)
+			}
+			if in.Changed() {
+				w.complete(t)
+			}
+			w.candidateKeys(t, in)
+			chosen := w.candidateList(c, t, box)
+			if chosen == nil && in.Submitted() {
+				// Enter takes the one the arrows are on.
+				if cs := t.cands; cs != nil && cs.at >= 0 && cs.at < len(cs.shown) {
+					chosen = &cs.shown[cs.at]
+				}
+			}
 			switch {
 			case t.fresh:
 				t.fresh = false
 				in.Focus()
 				in.SetTextSelection(0, utf8.RuneCountInString(t.addr))
+			case chosen != nil:
+				path := chosen.path
+				w.endAddress(t)
+				t.wantFocus = true
+				w.navigate(t, path, navPush, "")
 			case in.Submitted():
-				t.editing = false
+				w.endAddress(t)
 				t.wantFocus = true
 				w.goTo(t, t.addr)
 			case in.Shortcut(0, ui.KeyEscape):
-				t.editing = false
+				w.endAddress(t)
 				t.wantFocus = true
 			case in.FocusLeft():
-				t.editing = false
+				w.endAddress(t)
 			}
 		})
 		return
@@ -203,6 +225,7 @@ func (w *Window) crumbButton(c *ui.Context, key any, name string, current bool) 
 
 // editAddress turns the address into a text input holding the path.
 func (w *Window) editAddress(t *Tab) {
+	w.endAddress(t)
 	t.editing, t.fresh = true, true
 	t.addr = t.place()
 	if !real(t.addr) {
